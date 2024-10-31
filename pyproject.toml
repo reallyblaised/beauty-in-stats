@@ -1,0 +1,28 @@
+[
+tool.poetry
+]
+# basic info
+name = "beauty-in-stats"
+version = "0.1.0"
+description = "LLM-powered assistant for the statistical analysis of data collected with the LHCb experiment at CERN"
+authors = ["Blaise Delaney <blaiserd@proton.me>"]
+
+# code location
+packages = [
+    { include = "beauty-in-stats", from = "src" },
+]
+
+# Core dependencies for agile development towards a MVP
+[
+tool.poetry.dependencies 
+]
+python = "^3.9"
+PyMuPDF = "^1.23.5"               # For PDF processing
+requests = "^2.31.0"              # For downloading papers
+
+# Development dependencies
+[
+tool.poetry.group.dev.dependencies
+]
+pytest = "^7.4.3"                 # For testing
+black = "^23.11.0"                # For code formatting
