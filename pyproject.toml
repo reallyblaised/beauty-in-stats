@@ -1,34 +1,40 @@
 [tool.poetry]
-# basic info
 name = "beautyinstats"
 version = "0.1.0"
 description = "LLM-powered assistant for the statistical analysis of data collected with the LHCb experiment at CERN"
-authors = ["reallyblaised <blaiserd@proton.me>"]
+authors = ["reallyblaised <blaiserd at proton.me>"]
 readme = "README.md"              
 license = "MIT"                   
-# code location
 packages = [
-    { include = "beautyinstats", from = "src" }, 
+    { include = "**/*.py", from = "src" }
 ]
-# core dependencies
+
 [tool.poetry.dependencies]
 python = "^3.9"
 PyMuPDF = "^1.23.5"               # PDF processing
-requests = "^2.31.0"              # downloade papers
-pydantic = "^2.5.1"               # data validation - crucial for ML projects
-# dev-stage dependencies
-pydantic-settings = "^2.6.1"
+requests = "^2.31.0"              # download papers
+pydantic = "^2.5.1"               # data validation
+pydantic-settings = "^2.6.1"      # settings management
+loguru = "^0.7.0"                 # logging
+click = "^8.1.7"                  # CLI interface
+tqdm = "^4.62.3"                  # progress bars
+
+[tool.poetry.scripts]
+build-corpus = "scripts.build_corpus:build_corpus"
+
 [tool.poetry.group.dev.dependencies]
 pytest = "^7.4.3"                 # testing
 black = "^23.11.0"                # code formatting
 ruff = "^0.1.5"                   # linting
-mypy = "^1.7.0"                   # static type checking
-# development tools config
+mypy = "^1.7.0"                   # type checking
+
 [tool.black]
 line-length = 88
+
 [tool.ruff]
 line-length = 88
-select = ["E", "F", "I"]          # Error, Function, Import checks
+select = ["E", "F", "I"]
+
 [tool.mypy]
 strict = true                     
-ignore_missing_imports = true     
+ignore_missing_imports = true
