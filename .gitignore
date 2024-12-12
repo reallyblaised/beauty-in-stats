@@ -16,7 +16,6 @@ venv/
 # Logs and lock files
 *.log 
 *.log.*
-*.lock
 
 # Data and documents
 *.pdf

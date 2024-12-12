@@ -6,7 +6,7 @@ from pydantic import BaseModel, ConfigDict
 from loguru import logger
 import subprocess
 import os
-
+from tqdm import tqdm
 
 class LHCbPaper(BaseModel):
     """Represents a scientific paper from the LHCb collaboration.
@@ -115,39 +115,63 @@ class InspireClient:
 
     def _fetch_papers(self, params: dict) -> List[LHCbPaper]:
         """Internal method to handle API requests and paper object creation.
-
-        Parameters
-        ------------
-        params : dict
-            Query parameters for the API request
-
-        Returns
-        ------------
-        List[LHCbPaper]
-            List of paper objects from the API response
+        Handles pagination to fetch all results when no size limit is specified.
         """
+        # Copy params so we don't modify the original
+        params = params.copy()
+        
+        # Make initial request to get total number of papers
         response = requests.get(f"{self.base_url}/literature", params=params)
         response.raise_for_status()
-
-        papers = []
-        for hit in response.json()["hits"]["hits"]:
-            metadata = hit["metadata"]
-            arxiv_id = None
-            if "arxiv_eprints" in metadata and metadata["arxiv_eprints"]:
-                arxiv_id = metadata["arxiv_eprints"][0].get("value")
-
-            paper = LHCbPaper(
-                title=metadata["titles"][0]["title"],
-                citations=metadata.get("citation_count", 0),
-                arxiv_id=arxiv_id,
-                abstract=self.get_arxiv_abstract(metadata.get("abstracts", [])),
-                arxiv_pdf=f"https://arxiv.org/pdf/{arxiv_id}.pdf" if arxiv_id else None,
-                latex_source=f"https://arxiv.org/e-print/{arxiv_id}"
-                if arxiv_id
-                else None,
-            )
-            papers.append(paper)
-
+        data = response.json()
+        
+        total_hits = data['hits']['total']
+        logger.info(f"Total papers available: {total_hits}")
+        
+        if 'size' not in params:
+            # No limit specified - fetch all papers
+            params['size'] = 250  # API maximum per request
+            papers = []
+            
+            for page in tqdm(range(1, (total_hits // 250) + 2), desc="Fetching LHCb papers from INSPIRE API"):
+                params['page'] = page
+                response = requests.get(f"{self.base_url}/literature", params=params)
+                response.raise_for_status()
+                
+                for hit in response.json()['hits']['hits']:
+                    metadata = hit['metadata']
+                    arxiv_id = None
+                    if 'arxiv_eprints' in metadata and metadata['arxiv_eprints']:
+                        arxiv_id = metadata['arxiv_eprints'][0].get('value')
+                    
+                    paper = LHCbPaper(
+                        title=metadata['titles'][0]['title'],
+                        citations=metadata.get('citation_count', 0),
+                        arxiv_id=arxiv_id,
+                        abstract=self.get_arxiv_abstract(metadata.get('abstracts', [])),
+                        arxiv_pdf=f"https://arxiv.org/pdf/{arxiv_id}.pdf" if arxiv_id else None,
+                        latex_source=f"https://arxiv.org/e-print/{arxiv_id}" if arxiv_id else None
+                    )
+                    papers.append(paper)
+                
+                if len(response.json()['hits']['hits']) < 250:
+                    break
+        
+        else:
+            # Size limit specified - fetch single page
+            papers = [
+                LHCbPaper(
+                    title=hit['metadata']['titles'][0]['title'],
+                    citations=hit['metadata'].get('citation_count', 0),
+                    arxiv_id=hit['metadata']['arxiv_eprints'][0].get('value') if 'arxiv_eprints' in hit['metadata'] and hit['metadata']['arxiv_eprints'] else None,
+                    abstract=self.get_arxiv_abstract(hit['metadata'].get('abstracts', [])),
+                    arxiv_pdf=f"https://arxiv.org/pdf/{arxiv_id}.pdf" if arxiv_id else None,
+                    latex_source=f"https://arxiv.org/e-print/{arxiv_id}" if arxiv_id else None
+                )
+                for hit in data['hits']['hits']
+            ]
+        
+        logger.info(f"Fetching COMPLETE: identified {len(papers)} papers on INSPIRE in TOTAL")
         return papers
 
     def fetch_lhcb_papers(
@@ -165,7 +189,7 @@ class InspireClient:
             Start date in YYYY-MM-DD format
         end_date : str, optional
             End date in YYYY-MM-DD format
-        max_results : int, default=10
+        max_results : Optional[int], default=None
             Maximum number of papers to retrieve
         sort_by : str, default='mostcited'
             Sorting method for results ('mostcited', 'mostrecent')

@@ -89,7 +89,6 @@ class CorpusBuilder:
             f"Starting corpus build: max_papers={self.config.max_papers}, "
             f"download={self.config.download}, output_dir={self.config.output_dir}"
         )
-
         papers: Sequence[LHCbPaper] = self.client.fetch_lhcb_papers(
             start_date=self.config.start_date,
             end_date=self.config.end_date,
