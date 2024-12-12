@@ -15,7 +15,7 @@ python3 -m pipx ensurepath
 source ~/.bashrc # or any other default shell
 ```
 
-2. Install Poetry (package manager):
+2. Install [Poetry](https://python-poetry.org) (package manager):
 
 ```bash
 pipx install poetry
@@ -28,6 +28,18 @@ git clone https://github.com/reallyblaised/beauty-in-stats.git
 cd beauty-in-stats
 poetry install
 ```
+
+4. Verify the correct installation of the Poetry environment 
+
+```bash
+poetry env list
+>>> beautyinstats-U3Bi8mYg-py3.10 (Activated)
+```
+
+5. Load the Poetry shell to load the library environment
+```bash
+ poetry shell
+ ```
 
 ## Build the LHCb paper corpus
 
