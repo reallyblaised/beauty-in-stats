@@ -7,12 +7,21 @@ An explainable agentic workflow as analysis copilot for LHCb OpenData and dissem
 
 ## Setup
 
-1. Install Poetry (package manager):
+1. Prerequisites
+
 ```bash
-curl -sSL https://install.python-poetry.org | python3 -
+python3 -m pip install --user pipx
+python3 -m pipx ensurepath
+source ~/.bashrc # or any other default shell
 ```
 
-2. Clone the repository and install dependencies
+2. Install Poetry (package manager):
+
+```bash
+pipx install poetry
+```
+
+3. Clone the repository and install dependencies
 
 ```bash
 git clone https://github.com/reallyblaised/beauty-in-stats.git
