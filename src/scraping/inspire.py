@@ -155,8 +155,7 @@ class InspireClient:
                     papers.append(paper)
                 
                 if len(response.json()['hits']['hits']) < 250:
-                    break
-        
+                    break 
         else:
             # Size limit specified - fetch single page
             papers = [
@@ -165,13 +164,14 @@ class InspireClient:
                     citations=hit['metadata'].get('citation_count', 0),
                     arxiv_id=hit['metadata']['arxiv_eprints'][0].get('value') if 'arxiv_eprints' in hit['metadata'] and hit['metadata']['arxiv_eprints'] else None,
                     abstract=self.get_arxiv_abstract(hit['metadata'].get('abstracts', [])),
-                    arxiv_pdf=f"https://arxiv.org/pdf/{arxiv_id}.pdf" if arxiv_id else None,
-                    latex_source=f"https://arxiv.org/e-print/{arxiv_id}" if arxiv_id else None
+                    # Use the locally scoped arxiv_id from the previous line
+                    arxiv_pdf=f"https://arxiv.org/pdf/{hit['metadata']['arxiv_eprints'][0].get('value')}.pdf" if 'arxiv_eprints' in hit['metadata'] and hit['metadata']['arxiv_eprints'] else None,
+                    latex_source=f"https://arxiv.org/e-print/{hit['metadata']['arxiv_eprints'][0].get('value')}" if 'arxiv_eprints' in hit['metadata'] and hit['metadata']['arxiv_eprints'] else None
                 )
                 for hit in data['hits']['hits']
-            ]
+            ] 
         
-        logger.info(f"Fetching COMPLETE: identified {len(papers)} papers on INSPIRE in TOTAL")
+        logger.info(f"Fetching COMPLETE: identified {len(papers)} papers on INSPIRE in TOTAL.")
         return papers
 
     def fetch_lhcb_papers(
