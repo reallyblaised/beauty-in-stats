@@ -1,10 +1,39 @@
+# Python
 __pycache__/
 *.py[cod]
 *$py.class
+*cache*
+
+# Virtual environments
 .env
 .venv
 env/
 venv/
+
+# OS files
+.DS_Store
+
+# Logs and lock files
+*.log 
+*.log.*
+*.lock
+
+# Data and documents
 *.pdf
 data/
-.DS_Store
+
+# LaTeX
+*.aux
+*.bbl
+*.blg
+*.out
+*.toc
+*.dvi
+*.fls
+*.fdb_latexmk
+*.synctex.gz
+*.tex
+
+# IDE specific
+.idea/
+.vscode/
