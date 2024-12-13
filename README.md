@@ -63,28 +63,7 @@ graph TD
     %% Connect the workflows
     LLM_model -..-> Flow
     
-    style FT fill:#f0f0f0,stroke:#333,stroke-width:0px
-    style FT_node fill:#f9fbe7,stroke:#827717
-    style Flow fill:#f0f0f0,stroke:#333,stroke-width:0px
-    style Knowledge fill:#e1f5fe,stroke:#01579b
-    style LLM_model fill:#fff3e0,stroke:#e65100
-    style Proposer fill:#fff3e0,stroke:#e65100
-    style Checker fill:#fff3e0,stroke:#e65100
-    style LHCbCorpus fill:#e1f5fe,stroke:#01579b
-    style Abstracts fill:#e1f5fe,stroke:#01579b
-    style IP1 fill:#ffebee,stroke:#c62828
-    style IP2 fill:#ffebee,stroke:#c62828
-    style RP1 fill:#e8f5e9,stroke:#2e7d32
-    style RP2 fill:#e8f5e9,stroke:#2e7d32
-    style RAGnode fill:#f3e5f5,stroke:#6a1b9a
-    style Summary1 fill:#e0f2f1,stroke:#00695c
-    style Summary2 fill:#e0f2f1,stroke:#00695c
-    style SS1 fill:#eceff1,stroke:#455a64
-     style SS2 fill:#eceff1,stroke:#455a64
-      style SS3 fill:#eceff1,stroke:#455a64
-       style SS4 fill:#eceff1,stroke:#455a64
-
-    style QV fill:#fff3e0,stroke:#e65100
+   
      style Bonus fill:none,stroke:#333,stroke-width:1px,stroke-dasharray: 5 5
 ```
 
@@ -128,3 +107,4 @@ graph TD
 - [Language agents achieve superhuman synthesis of scientific knowledge](https://arxiv.org/abs/2409.13740)
 - [PACuna: Automated Fine-Tuning of Language Models
 for Particle Accelerators](https://arxiv.org/pdf/2310.19106v3)
+- [AI Engineering](https://www.oreilly.com/library/view/ai-engineering/9781098166298/)
