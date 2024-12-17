@@ -129,3 +129,9 @@ graph TD
 - [PACuna: Automated Fine-Tuning of Language Models
 for Particle Accelerators](https://arxiv.org/pdf/2310.19106v3)
 - [AI Engineering](https://www.oreilly.com/library/view/ai-engineering/9781098166298/)
+- [PhysBERT: A Text Embedding Model for Physics Scientific Literature](https://arxiv.org/pdf/2408.09574v1)
+
+### Potentially Helpful Tutorials 
+
+- [Building a GraphRAG Agent With Neo4j and Milvus](https://neo4j.com/developer-blog/graphrag-agent-neo4j-milvus/)
+- [Fine-Tuning Open-Source LLM using QLoRA with MLflow and PEFT](https://mlflow.org/docs/latest/llms/transformers/tutorials/fine-tuning/transformers-peft.html)
