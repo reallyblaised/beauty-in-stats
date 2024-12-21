@@ -18,6 +18,7 @@ pydantic-settings = "^2.6.1"      # settings management
 loguru = "^0.7.0"                 # logging
 click = "^8.1.7"                  # CLI interface
 tqdm = "^4.62.3"                  # progress bars
+docling = "^2.14.0"               # linguistic processing
 
 [tool.poetry.scripts]
 build-corpus = "scripts.build_lhcb_corpus:main"
