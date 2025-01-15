@@ -26,7 +26,7 @@ class ClassificationConfig:
     ==================
     1. Determine if the abstract pertains to physics analysis or a technical paper. 
     2. Extract the particle processes analysed in the measurement or search --- typically enclosed in $$ symbols.
-    3. Identify the integrated luminosity of the dataset considered, and any mention of the runs of LHCb data taking (Run 1, Run 2, Run1+2, Run 3), if any.
+    3. Identify the centre-of-mass energy, any mention of the runs of LHCb data taking (Run 1, Run 2, Run1+2, Run 3), if any, and the integrated luminosity of the dataset considered.
     4. Focus key words detailing the primary result of the paper. EXAPLE: "measurement", "angular analysis", "test", "search", etc. 
 
     PHYSICS SCOPE 
@@ -41,14 +41,14 @@ class ClassificationConfig:
     - `forbidden_decays`: searches for baryon number violation, lepton flavour violation, lepton flavour universality violation, and lepton number violation in the decays of heavy-flavoured hadrons. 
     - `jet_physics`: Jet Physics and QCD, which typically focuses on the study of jet production in $pp$ collisions and the extraction of strong coupling constant, $\alpha_s$.
     - `heavy_ions`: ANY analysis of data NOT PRODUCED IN PROTON-PROTON collisions, but LED+matter interactions: EXAMPLE: $PbPb$, $p$Ne, $pPb$. 
-    - `charm`: charm mesons and baryons, charge-parity asymmetry effects in the charm sector, and the extraction of CKM matrix elements, $|V_{cs}|$ and $|V_{cd}|$. The word 'CHARMLESS' means that this label DOES NOT APPLY. 
+    - `charm`: charm mesons and baryons, charge-parity asymmetry effects in the charm sector, and the extraction of CKM matrix elements, $|V_{cs}|$ and $|V_{cd}|$. The word 'CHARMLESS' means that this label DOES NOT APPLY. EXAMPLES: decays of $D^+$, $D_s$, $D^0$, $\Xi_c$, ... IMPORTANT: THEY NEVER INCLUDE BEAUTY DECAYS.
     - `CPV`: CP violation measurements in BEAUTY decays only, typically forcused on CP asymmetries and precision measurmements of the CKM angle $\gamma$ and the CKM phase $\beta$.
     
     RUN PERIOD 
     ==========
     Labels defined by years of data taking and the corresponding centre-of-mass energy and integrated luminosity:
-    - `Run1`: years 2011 (1 fb-1, 7 TeV), 2012 (2 fb-1, 8 TeV); total integrated luminosity: 3 fb-1. 
-    - `Run2`: years 2015 (0.3 fb-1, 13 TeV), 2016 (1.6 fb-1, 13 TeV), 2017 (1.7 fb-1, 13 TeV), 2018 (2.1 fb-1, 13 TeV); total integrated luminosity: 5.4 fb-1 or 6 fb-1.
+    - `Run1`: years 2011 (1.0 fb-1, 7 TeV), 2012 (2.0 fb-1, 8 TeV); total integrated luminosity: 3 fb-1. 
+    - `Run2`: years 2015 (0.3 fb-1, 13 TeV), 2016 (1.6 fb-1 AND NOT 1.0 fb-1, 13 TeV), 2017 (1.7 fb-1 AND NOT 1.0 fb-1, 13 TeV), 2018 (2.1 fb-1, 13 TeV); total integrated luminosity: 5.4 fb-1 or 6 fb-1. Check that the centre-of-mass energy is 13 TeV before assigning this label.
     - `Run1+2`: years 2011-2012, 2015-2018; total integrated luminosity: ~9 fb-1.
     - `Run3`: years 2022-2025; total integrated luminosity: ~15 fb-1 and nominal centre-of-mass energy of 13.6 TeV, *NOT 13 TeV*. NOTE: 13 TeV means Run 2 data taking.
 
@@ -109,7 +109,7 @@ class ClassificationConfig:
     Example responses:
     {{{{
         "focus": "b->sll", "radiative decays",
-        "run": "Run2",
+        "run": "Run1",
         "strategy": "angular_analysis", "search"
     }}}}
 
