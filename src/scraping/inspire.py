@@ -349,7 +349,7 @@ class InspireClient:
         try:
             os.chdir(main_tex.parent)
             result = subprocess.run(
-                ["latexpand", main_tex.name], capture_output=True, text=True, check=True
+                ["/n/home10/jmcgreivy/latexpand/latexpand", main_tex.name], capture_output=True, text=True, check=True
             )
             expanded_tex.write_text(result.stdout)
             return expanded_tex
