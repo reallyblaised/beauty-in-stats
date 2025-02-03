@@ -40,14 +40,14 @@ The scraper can be run using Docker or Apptainer. This README provides instructi
    Navigate to the directory containing the `Apptainer.def` file and run the following command:
 
    ```bash
-   apptainer build lhcb_scraper.sif Apptainer.def
+   apptainer build lhcb-scraper-container.sif Apptainer.def
    ```
 
 2. **Run the Apptainer Container with GPU Access**:
    To run the scraper with GPU access, use the following command:
 
    ```bash
-   apptainer exec --nv lhcb_scraper.sif
+   apptainer shell --nv lhcb-scraper-container.sif
    ```
 
    The `--nv` flag allows the container to access the GPU resources of the host.

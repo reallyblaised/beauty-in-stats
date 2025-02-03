@@ -1,5 +1,6 @@
-selenium>=4.0.0
+selenium
 smolagents
 webdriver_manager
 torch
 transformers
+helium
