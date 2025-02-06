@@ -2,7 +2,7 @@ Bootstrap: docker
 From: python:3.10-slim
 
 %labels
-    Author YourName
+    Author Blaise Delaney
     Version 1.0
 
 %post
@@ -25,6 +25,3 @@ From: python:3.10-slim
 %environment
     export PYTHONUNBUFFERED=1
     export DISPLAY=:99
-
-%runscript
-    exec python /app/lhcb_scraper.py
