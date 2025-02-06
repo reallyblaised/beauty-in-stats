@@ -61,5 +61,4 @@ The scraper can be run using Docker or Apptainer. This README provides instructi
    ```bash
    python scrape_build_lhcb_papers.py
    ```
-
    This will execute the `scrape_build_lhcb_papers.py` script inside the container.
