@@ -314,6 +314,7 @@ class InspireClient:
 
         # bookeeping: save the current working directory before stepping into the .tex source directory
         cwd = Path.cwd()
+        breakpoint()
         try:
             os.chdir(main_tex.parent)
             result = subprocess.run(

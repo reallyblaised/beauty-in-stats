@@ -6,14 +6,14 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from time import sleep
 import pandas as pd
-from datetime import datetime
-import argparse
 import re
 from loguru import logger
 from api_clients.inspire import InspireClient
 from core.models import LHCbPaper
-from .build_lhcb_corpus import CorpusBuilder, CorpusConfig
+from scripts.build_lhcb_corpus import CorpusBuilder, CorpusConfig
 from tqdm import tqdm
+import requests
+import click
 
 def normalize_working_group(wg: str) -> str:
     """Convert working group label to snake_case format"""
@@ -84,15 +84,39 @@ def process_page(driver) -> List[dict]:
     
     return page_papers
 
-def scrape_papers(max_papers: Optional[int] = None) -> List[dict]:
-    """Scrape papers from LHCb publication page"""
+def scrape_and_enrich_papers(
+    max_papers: Optional[int] = None,
+    download: bool = False,
+    output_dir: Optional[Path] = None,
+    verbose: bool = False
+) -> pd.DataFrame:
+    """
+    Scrape papers from LHCb publication page and enrich with INSPIRE metadata.
+    
+    Parameters
+    ----------
+    max_papers : Optional[int]
+        Maximum number of papers to process
+    download : bool
+        Whether to download PDFs and LaTeX sources
+    output_dir : Optional[Path]
+        Directory to save downloaded files
+    verbose : bool
+        Enable verbose logging
+    
+    Returns
+    -------
+    pd.DataFrame
+        DataFrame containing all paper metadata
+    """
     options = webdriver.ChromeOptions()
     options.add_argument('--headless')
     options.add_argument('--no-sandbox')
     options.add_argument('--disable-dev-shm-usage')
     driver = webdriver.Chrome(options=options)
     
-    all_papers = []
+    papers_data = []
+    inspire_client = InspireClient()
     
     try:
         logger.info("Loading LHCb publication page...")
@@ -101,46 +125,81 @@ def scrape_papers(max_papers: Optional[int] = None) -> List[dict]:
         wait = WebDriverWait(driver, 10)
         table = wait.until(EC.presence_of_element_located((By.TAG_NAME, "table")))
         
-        # HACK: Initialize InspireClient for citation fetching - this is a hack to get the citations and integrate them into the paper object
-        config = CorpusConfig(
-            start_date=None,
-            end_date=None,
-            max_papers=max_papers,
-            download=False,
-            output_dir=Path("data"),
-            verbose=False
-        )
-        inspire_client = CorpusBuilder(config).client
-        
         while True:
-            logger.info("Processing current page...")
             page_papers = process_page(driver)
+            logger.info(f"Found {len(page_papers)} papers on current page")
             
-            # Fetch citations for each paper
+            # Process each paper on the page
             for paper in page_papers:
-                if paper['arxiv_id']:
-                    try:
-                        paper_data = inspire_client.fetch_paper_metadata(paper['arxiv_id'])
-                        paper['citations'] = paper_data.get('citations', 0) if paper_data else 0
-                        logger.debug(f"Paper {paper['arxiv_id']} has {paper['citations']} citations")
-                    except Exception as e:
-                        logger.warning(f"Failed to fetch citations for {paper['arxiv_id']}: {e}")
-                        paper['citations'] = 0
-                else:
-                    paper['citations'] = 0
+                if not paper['arxiv_id']:
+                    continue
+                    
+                try:
+                    # Fetch paper metadata
+                    query = f'arxiv:{paper["arxiv_id"]}'
+                    params = {
+                        "q": query,
+                        "fields": ["titles,arxiv_eprints,dois,citation_count,abstracts"],
+                    }
+                    response = requests.get(f"{inspire_client.base_url}/literature", params=params)
+                    response.raise_for_status()
+                    data = response.json()
+                    
+                    if data['hits']['hits']:
+                        metadata = data['hits']['hits'][0]['metadata']
+                        citations = metadata.get('citation_count', 0)
+                        abstract = inspire_client.get_arxiv_abstract(metadata.get('abstracts', []))
+                        
+                        # Get arXiv PDF URL
+                        arxiv_eprints = metadata.get('arxiv_eprints', [])
+                        arxiv_pdf = None
+                        if arxiv_eprints:
+                            arxiv_id = arxiv_eprints[0].get('value')
+                            if arxiv_id:
+                                arxiv_pdf = f"https://arxiv.org/pdf/{arxiv_id}.pdf"
+                    else:
+                        citations = 0
+                        abstract = ""
+                        arxiv_pdf = None
+                        
+                except Exception as e:
+                    logger.warning(f"Failed to fetch metadata for {paper['arxiv_id']}: {e}")
+                    citations = 0
+                    abstract = ""
+                    arxiv_pdf = None
+                
+                # Create enriched paper object
+                arxiv_id = paper['arxiv_id']
+                paper_obj = LHCbPaper(
+                    lhcb_paper_id=paper['lhcb_paper_id'],
+                    title=paper['title'],
+                    arxiv_id=arxiv_id,
+                    citations=citations,
+                    working_groups=paper['working_groups'],
+                    data_taking_years=paper['data_taking_years'],
+                    run_period=paper['run_period'],
+                    abstract=abstract,
+                    arxiv_pdf=f"https://arxiv.org/pdf/{arxiv_id}.pdf" if arxiv_id else None,
+                    latex_source=f"https://arxiv.org/e-print/{arxiv_id}" if arxiv_id else None
+                )
+                
+                # Convert to dict for DataFrame
+                papers_data.append(paper_obj.__dict__)
+                
+                if max_papers and len(papers_data) >= max_papers:
+                    logger.info(f"Reached limit of {max_papers} papers")
+                    break
             
-            all_papers.extend(page_papers)
-            
-            if max_papers and len(all_papers) >= max_papers:
-                logger.info(f"Reached limit of {max_papers} papers.")
+            if max_papers and len(papers_data) >= max_papers:
                 break
-            
+                
+            # Check for next page
             try:
                 next_button = driver.find_element(By.XPATH, "//button[@aria-label='Next page']")
                 if not next_button or 'disabled' in next_button.get_attribute('class'):
                     logger.info("Reached last page")
                     break
-                    
+                
                 next_button.click()
                 logger.debug("Moving to next page...")
                 sleep(1)
@@ -149,81 +208,117 @@ def scrape_papers(max_papers: Optional[int] = None) -> List[dict]:
                 logger.info("No more pages found")
                 break
     
-    except Exception as e:
-        logger.error(f"Error scraping: {e}")
-    
     finally:
         driver.quit()
     
-    return all_papers
+    # Create DataFrame
+    df = pd.DataFrame(papers_data)
+    
+    # Save data if output_dir provided
+    if output_dir:
+        output_dir = Path(output_dir)
+        output_dir.mkdir(parents=True, exist_ok=True)
+        df.to_pickle(output_dir / 'lhcb_papers.pkl')
+        df.to_csv(output_dir / 'lhcb_papers.csv', index=False)
+        logger.info(f"Saved paper metadata to {output_dir}")
+        
+        # Download papers if requested
+        if download:
+            config = CorpusConfig(
+                start_date=None,
+                end_date=None,
+                max_papers=len(df),
+                download=True,
+                output_dir=output_dir,
+                verbose=verbose
+            )
+            builder = CorpusBuilder(config)
+            
+            failed_downloads = []
+            for _, row in tqdm(df.iterrows(), desc="Downloading papers", total=len(df)):
+                paper = LHCbPaper(**row.to_dict())
+                
+                try:
+                    success = builder.download_paper(paper)
+                    if not success:
+                        failed_downloads.append(paper.lhcb_paper_id)
+                except Exception as e:
+                    failed_downloads.append(paper.lhcb_paper_id)
+                    logger.error(f"Error downloading paper '{paper.title}': {str(e)}")
+            
+            if failed_downloads:
+                logger.warning(f"Failed to download {len(failed_downloads)} papers")
+    
+    return df
 
-def build_corpus_from_scrape(papers: List[dict], output_dir: Path, verbose: bool = False) -> None:
-    """Build corpus using scraped papers data, downloading the papers and saving them to the output directory"""
-    config = CorpusConfig(
-        start_date=None,
-        end_date=None,
-        max_papers=len(papers),
-        download=True,  
-        output_dir=output_dir,
-        verbose=verbose
+def validate_paper_count(
+    ctx: click.Context, param: click.Parameter, value: Optional[int]
+) -> Optional[int]:
+    """
+    Validate paper count is a positive integer.
+
+    Parameters
+    ----------
+    ctx: click.Context
+        Click context
+    param: click.Parameter
+        Click parameter
+    value: Optional[int]
+        Number of papers to download
+
+    Returns
+    -------
+    Optional[int]
+        Number of papers to download if positive
+    """
+    if value is not None and value <= 0:
+        raise click.BadParameter("Number of papers must be positive")
+    return value
+
+@click.command()
+@click.option(
+    "--max-papers",
+    "-n",
+    default=None,
+    type=click.IntRange(1, 10_000),
+    callback=validate_paper_count,
+    help="Maximum number of LHCb papers to scrape (default: no limit)",
+)
+@click.option(
+    "--download/--no-download",
+    default=True,
+    help="Download PDFs and LaTeX source for papers",
+)
+@click.option(
+    "--output-dir",
+    "-o",
+    type=click.Path(path_type=Path),
+    default=Path("data"),
+    help="Base directory for downloaded files",
+)
+@click.option("--verbose", "-v", is_flag=True, help="Enable verbose logging")
+def main(**kwargs) -> None:
+    """Scrape LHCb papers and optionally download their content."""
+    # Set up logging
+    log_level = "DEBUG" if kwargs.get('verbose') else "INFO"
+    logger.remove()
+    logger.add(
+        "scraping.log",
+        rotation="1 week",
+        level=log_level,
+        format="{time:YYYY-MM-DD HH:mm:ss} | {level: <8} | {message}"
+    )
+    logger.add(lambda msg: click.echo(msg, err=True), level=log_level)
+    
+    # Scrape and process papers
+    df = scrape_and_enrich_papers(
+        max_papers=kwargs.get('max_papers'),
+        download=kwargs.get('download'),
+        output_dir=kwargs.get('output_dir'),
+        verbose=kwargs.get('verbose')
     )
     
-    builder = CorpusBuilder(config)
-    inspire_client = builder.client  # Get the InspireClient instance
-    
-    # Convert scraped paper data to LHCbPaper objects
-    lhcb_papers = []
-    for paper in papers:
-        if paper['arxiv_id']:  # Only process papers with arXiv IDs
-            # Fetch citation count from INSPIRE for this paper
-            try:
-                paper_data = inspire_client.fetch_paper_metadata(paper['arxiv_id'])
-                citations = paper_data.get('citations', 0) if paper_data else 0
-            except Exception as e:
-                logger.warning(f"Failed to fetch citations for {paper['arxiv_id']}: {e}")
-                citations = 0
-                
-            paper_obj = LHCbPaper(
-                title=paper['title'],
-                arxiv_id=paper['arxiv_id'],
-                citations=citations
-            )
-            lhcb_papers.append(paper_obj)
-            logger.debug(f"Paper {paper['arxiv_id']} has {citations} citations")
-    
-    # Download papers
-    if config.download:
-        failed_downloads = []
-        for paper in tqdm(lhcb_papers, desc="Downloading and unpacking LHCb papers"):
-            try:
-                success = builder.download_paper(paper)
-                if not success:
-                    failed_downloads.append(paper)
-            except Exception as e:
-                failed_downloads.append(paper)
-                logger.error(f"Error downloading paper '{paper.title}': {str(e)}")
-
-def main():
-    """Main function to scrape papers and build corpus"""
-    parser = argparse.ArgumentParser(description="Scrape LHCb papers.")
-    parser.add_argument('--max_papers', type=int, help='Maximum number of papers to scrape', default=None)
-    args = parser.parse_args()
-    
-    papers = scrape_papers(max_papers=args.max_papers)
-    logger.info(f"Successfully scraped {len(papers)} papers")
-    
-    # Save metadata with citations
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    df = pd.DataFrame(papers)
-    
-    # Save both pickle and CSV formats
-    df.to_pickle(f'lhcb_papers_{timestamp}.pkl')
-    df.to_csv(f'lhcb_papers_{timestamp}.csv', index=False)
-    logger.info(f"Saved paper metadata to lhcb_papers_{timestamp}.pkl and .csv")
-    
-    # Build corpus
-    output_dir = Path("data")
-    build_corpus_from_scrape(papers, output_dir, verbose=True)
+    logger.info(f"Successfully processed {len(df)} papers")
 
 if __name__ == "__main__":
     main()
