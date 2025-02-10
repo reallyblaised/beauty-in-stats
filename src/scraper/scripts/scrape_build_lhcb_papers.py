@@ -4,6 +4,8 @@ from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
+from selenium.common.exceptions import TimeoutException
+import time
 from time import sleep
 import pandas as pd
 import re
@@ -11,9 +13,11 @@ from loguru import logger
 from api_clients.inspire import InspireClient
 from core.models import LHCbPaper
 from scripts.build_lhcb_corpus import CorpusBuilder, CorpusConfig
+from scripts.post_process_latex import process_file
 from tqdm import tqdm
 import requests
 import click
+
 
 def normalize_working_group(wg: str) -> str:
     """Convert working group label to snake_case format"""
@@ -113,35 +117,68 @@ def scrape_and_enrich_papers(
     options.add_argument('--headless')
     options.add_argument('--no-sandbox')
     options.add_argument('--disable-dev-shm-usage')
-    driver = webdriver.Chrome(options=options)
+    options.add_argument('--disable-gpu')
+    options.add_argument('--page-load-timeout=30')
     
+    driver = None
     papers_data = []
     inspire_client = InspireClient()
     
     try:
-        logger.info("Loading LHCb publication page...")
-        driver.get('https://lbfence.cern.ch/alcm/public/analysis')
+        # Add retry logic for driver initialization
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                logger.info(f"Initializing Chrome WebDriver (attempt {attempt + 1}/{max_retries})")
+                driver = webdriver.Chrome(options=options)
+                driver.set_page_load_timeout(30)
+                break
+            except Exception as e:
+                logger.error(f"WebDriver initialization failed (attempt {attempt + 1}): {e}")
+                if driver:
+                    try:
+                        driver.quit()
+                    except:
+                        pass
+                if attempt == max_retries - 1:
+                    raise
+                time.sleep(2)
         
-        wait = WebDriverWait(driver, 10)
-        table = wait.until(EC.presence_of_element_located((By.TAG_NAME, "table")))
+        logger.info("Loading LHCb publication page...")
+        # Add retry logic for page load
+        max_page_retries = 3
+        for attempt in range(max_page_retries):
+            try:
+                driver.get('https://lbfence.cern.ch/alcm/public/analysis')
+                wait = WebDriverWait(driver, 10)
+                table = wait.until(EC.presence_of_element_located((By.TAG_NAME, "table")))
+                break
+            except Exception as e:
+                logger.error(f"Page load failed (attempt {attempt + 1}): {e}")
+                if attempt == max_page_retries - 1:
+                    raise
+                time.sleep(2)
         
         while True:
             page_papers = process_page(driver)
             logger.info(f"Found {len(page_papers)} papers on current page")
             
-            # Process each paper on the page
             for paper in page_papers:
                 if not paper['arxiv_id']:
                     continue
                     
                 try:
-                    # Fetch paper metadata
+                    # Add timeout to API request
                     query = f'arxiv:{paper["arxiv_id"]}'
                     params = {
                         "q": query,
                         "fields": ["titles,arxiv_eprints,dois,citation_count,abstracts"],
                     }
-                    response = requests.get(f"{inspire_client.base_url}/literature", params=params)
+                    response = requests.get(
+                        f"{inspire_client.base_url}/literature",
+                        params=params,
+                        timeout=10  # Add timeout
+                    )
                     response.raise_for_status()
                     data = response.json()
                     
@@ -149,8 +186,6 @@ def scrape_and_enrich_papers(
                         metadata = data['hits']['hits'][0]['metadata']
                         citations = metadata.get('citation_count', 0)
                         abstract = inspire_client.get_arxiv_abstract(metadata.get('abstracts', []))
-                        
-                        # Get arXiv PDF URL
                         arxiv_eprints = metadata.get('arxiv_eprints', [])
                         arxiv_pdf = None
                         if arxiv_eprints:
@@ -162,6 +197,11 @@ def scrape_and_enrich_papers(
                         abstract = ""
                         arxiv_pdf = None
                         
+                except requests.Timeout:
+                    logger.warning(f"Timeout while fetching metadata for {paper['arxiv_id']}")
+                    citations = 0
+                    abstract = ""
+                    arxiv_pdf = None
                 except Exception as e:
                     logger.warning(f"Failed to fetch metadata for {paper['arxiv_id']}: {e}")
                     citations = 0
@@ -183,7 +223,6 @@ def scrape_and_enrich_papers(
                     latex_source=f"https://arxiv.org/e-print/{arxiv_id}" if arxiv_id else None
                 )
                 
-                # Convert to dict for DataFrame
                 papers_data.append(paper_obj.__dict__)
                 
                 if max_papers and len(papers_data) >= max_papers:
@@ -192,24 +231,32 @@ def scrape_and_enrich_papers(
             
             if max_papers and len(papers_data) >= max_papers:
                 break
-                
-            # Check for next page
+            
+            # Check for next page with explicit timeout
             try:
-                next_button = driver.find_element(By.XPATH, "//button[@aria-label='Next page']")
+                next_button = WebDriverWait(driver, 5).until(
+                    EC.presence_of_element_located((By.XPATH, "//button[@aria-label='Next page']"))
+                )
                 if not next_button or 'disabled' in next_button.get_attribute('class'):
                     logger.info("Reached last page")
                     break
                 
                 next_button.click()
-                logger.debug("Moving to next page...")
-                sleep(1)
+                time.sleep(1)
                 
+            except TimeoutException:
+                logger.info("No more pages found (timeout)")
+                break
             except Exception as e:
-                logger.info("No more pages found")
+                logger.info(f"No more pages found: {e}")
                 break
     
     finally:
-        driver.quit()
+        if driver:
+            try:
+                driver.quit()
+            except:
+                pass
     
     # Create DataFrame
     df = pd.DataFrame(papers_data)
@@ -222,7 +269,6 @@ def scrape_and_enrich_papers(
         df.to_csv(output_dir / 'lhcb_papers.csv', index=False)
         logger.info(f"Saved paper metadata to {output_dir}")
         
-        # Download papers if requested
         if download:
             config = CorpusConfig(
                 start_date=None,
@@ -319,6 +365,8 @@ def main(**kwargs) -> None:
     )
     
     logger.info(f"Successfully processed {len(df)} papers")
+
+
 
 if __name__ == "__main__":
     main()

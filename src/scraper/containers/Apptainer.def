@@ -41,3 +41,6 @@ From: python:3.10-slim
 
 %files
     . /app
+
+%runscript
+    exec python /app/scripts/scrape_build_lhcb_papers.py "$@"
