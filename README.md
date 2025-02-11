@@ -38,7 +38,8 @@ poetry env list
 
 5. Load the Poetry shell to load the library environment
 ```bash
- poetry shell
+poetry self add poetry-plugin-shell
+poetry shell
  ```
 
 ## Build the LHCb paper corpus
