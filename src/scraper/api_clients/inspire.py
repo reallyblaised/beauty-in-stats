@@ -7,35 +7,10 @@ from loguru import logger
 import subprocess
 import os
 from tqdm import tqdm
-
-class LHCbPaper(BaseModel):
-    """Represents a scientific paper from the LHCb collaboration.
-
-    Parameters
-    ------------
-    title : str
-        Title of the paper
-    citations : int, default=0
-        Number of citations the paper has received
-    arxiv_id : str, optional
-        The arXiv identifier of the paper
-    abstract : str, optional
-        Paper abstract text
-    arxiv_pdf : str, optional
-        URL to the paper's PDF on arXiv
-    latex_source : str, optional
-        URL to the paper's LaTeX source on arXiv
-    """
-
-    model_config = ConfigDict(frozen=True)
-
-    title: str
-    citations: int = 0
-    arxiv_id: Optional[str] = None
-    abstract: Optional[str] = None
-    arxiv_pdf: Optional[str] = None
-    latex_source: Optional[str] = None
-
+from core.models import LHCbPaper
+import time
+import shutil
+import tarfile
 
 class InspireClient:
     """Client for interacting with the INSPIRE-HEP API."""
@@ -318,17 +293,30 @@ class InspireClient:
         if not source_file.exists():
             logger.error(f"Source file not found: {source_file}")
             return None
+            
+        # Verify file isn't empty
+        if source_file.stat().st_size == 0:
+            logger.error(f"Source file is empty: {source_file}")
+            return None
 
         paper_dir = self.source_dir / f"{paper.arxiv_id}"
         paper_dir.mkdir(exist_ok=True)
 
         try:
-            with tarfile.open(source_file, "r:gz") as tar:
+            with tarfile.open(source_file) as tar:
+                # Check for suspicious paths before extraction
+                for member in tar.getmembers():
+                    if member.name.startswith('/') or '..' in member.name:
+                        logger.error(f"Suspicious path in tarfile: {member.name}")
+                        return None
                 tar.extractall(path=paper_dir)
 
             source_file.unlink(missing_ok=True)
         except tarfile.ReadError as e:
             logger.error(f"Failed to extract source: {e}")
+            return None
+        except Exception as e:
+            logger.error(f"Unexpected error during extraction: {e}")
             return None
 
         main_tex = self.find_main_tex(paper_dir)
@@ -336,27 +324,41 @@ class InspireClient:
             logger.error(f"Could not find main TeX file for {paper.arxiv_id}")
             return None
 
-        # book the full path of the expanded directory to avoid conflicts whence cd to the source .tex directory
         expanded_tex = (self.expanded_tex_dir / f"{paper.arxiv_id}.tex").resolve()
 
-        # bookeeping: save the current working directory before stepping into the .tex source directory
         cwd = Path.cwd()
         try:
             os.chdir(main_tex.parent)
+            
+            # Check if latexpand is available
+            if not shutil.which('latexpand'):
+                logger.error("latexpand command not found. Please install it.")
+                return None
+                
             result = subprocess.run(
-                ["latexpand", main_tex.name], capture_output=True, text=True, check=True
+                ["latexpand", main_tex.name],
+                capture_output=True,
+                text=True,
+                check=True,
+                timeout=60  # Add timeout to prevent hanging
             )
+            
+            if not result.stdout.strip():
+                logger.error("latexpand produced empty output")
+                return None
+                
             expanded_tex.write_text(result.stdout)
             return expanded_tex
 
         except subprocess.CalledProcessError as e:
-            logger.error(f"latexpand failed: {e}")
+            logger.error(f"latexpand failed: {e.stderr}")
             return None
-
+        except subprocess.TimeoutExpired:
+            logger.error("latexpand timed out")
+            return None
         except Exception as e:
             logger.error(f"Failed to process LaTeX source: {e}")
             return None
-
         finally:
             os.chdir(cwd)
 
@@ -376,7 +378,7 @@ class InspireClient:
         return self.download_source(paper)
 
     def download_source(self, paper: LHCbPaper) -> Optional[Path]:
-        """Download and process paper source files.
+        """Download paper source files using arXiv's API endpoint.
 
         Parameters
         ------------
@@ -388,19 +390,73 @@ class InspireClient:
         Optional[Path]
             Path to the expanded LaTeX file, or None if processing failed
         """
-        if not paper.latex_source:
+        if not paper.latex_source or not paper.arxiv_id:
             return None
 
         try:
-            response = requests.get(paper.latex_source)
+            # Use arXiv's API endpoint instead of direct download
+            source_url = f"http://export.arxiv.org/e-print/{paper.arxiv_id}"
+            headers = {
+                'User-Agent': 'LHCbPaperBot/1.0 (Contact: your.email@example.com)',
+                'Accept': 'application/x-tar, application/x-gzip, */*'
+            }
+
+            # Add delay to respect rate limits
+            time.sleep(3)  # Wait between requests
+
+            response = requests.get(
+                source_url,
+                timeout=30,
+                verify=True,
+                headers=headers
+            )
             response.raise_for_status()
+
+            # Check for CAPTCHA or HTML response
+            content_type = response.headers.get('content-type', '').lower()
+            if 'text/html' in content_type or response.content[:100].decode('utf-8', errors='ignore').strip().startswith(('<html', '<!DOCTYPE')):
+                logger.error(f"Received CAPTCHA or HTML instead of tar.gz for {paper.arxiv_id}")
+                logger.debug(f"Headers: {response.headers}")
+                logger.debug(f"Content start: {response.content[:200]}")
+                return None
+
+            # File size checks
+            content_length = len(response.content)
+            if content_length == 0:
+                logger.error("Received empty file")
+                return None
+            if content_length < 1000:  
+                logger.error(f"Suspiciously small file: {content_length} bytes")
+                return None
+            if content_length > 50 * 1024 * 1024:
+                logger.error(f"File too large: {content_length / 1024 / 1024:.1f}MB")
+                return None
 
             source_file = self.source_dir / f"{paper.arxiv_id}_source.tar.gz"
             source_file.write_bytes(response.content)
 
-            expanded_file = self.extract_and_expand_latex(paper, source_file)
-            return expanded_file
+            # Add exponential backoff for retries
+            max_retries = 3
+            for attempt in range(max_retries):
+                try:
+                    expanded_file = self.extract_and_expand_latex(paper, source_file)
+                    if expanded_file:
+                        return expanded_file
+                except Exception as e:
+                    wait_time = 2 ** attempt  # 1, 2, 4 seconds
+                    logger.warning(f"Attempt {attempt + 1}/{max_retries} failed: {e}. Waiting {wait_time}s...")
+                    time.sleep(wait_time)
+                    if attempt == max_retries - 1:
+                        raise
 
+            return None
+
+        except requests.Timeout:
+            logger.error("Download timed out")
+            return None
         except requests.RequestException as e:
             logger.error(f"Failed to download source: {e}")
+            return None
+        except Exception as e:
+            logger.error(f"Unexpected error during download: {e}")
             return None

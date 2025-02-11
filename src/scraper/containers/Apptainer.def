@@ -1,0 +1,47 @@
+Bootstrap: docker
+From: python:3.10-slim
+
+%labels
+    Author Blaise Delaney
+    Version 1.0
+    Description LHCb Papers Analysis Framework
+
+%environment
+    # Essential for maintaining Python package resolution
+    export PYTHONPATH=/app
+    export PYTHONUNBUFFERED=1
+    export PYTHONDONTWRITEBYTECODE=1
+    export DEBIAN_FRONTEND=noninteractive
+    export DISPLAY=:99
+
+%post
+    apt-get update && apt-get install -y \
+        wget \
+        gnupg \
+        chromium \
+        chromium-driver \
+        ca-certificates \
+        perl \
+        unzip \
+        curl \
+        && apt-get clean \
+        && rm -rf /var/lib/apt/lists/*
+    
+    # Install just latexpand directly without any archives
+    wget -qO /usr/local/bin/latexpand \
+        https://mirrors.ctan.org/support/latexpand/latexpand \
+        && chmod +x /usr/local/bin/latexpand
+    
+    # Ensure directory structure preservation for relative imports
+    mkdir -p /app/api_clients
+    mkdir -p /app/config
+    mkdir -p /app/core
+    mkdir -p /app/scripts
+    
+    pip install --no-cache-dir -r /app/containers/requirements.txt
+
+%files
+    . /app
+
+%runscript
+    exec python /app/scripts/scrape_build_lhcb_papers.py "$@"
