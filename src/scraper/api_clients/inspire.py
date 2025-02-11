@@ -7,7 +7,7 @@ from loguru import logger
 import subprocess
 import os
 from tqdm import tqdm
-from core.models import LHCbPaper
+from scraper.core.models import LHCbPaper
 import time
 import shutil
 import tarfile
@@ -118,7 +118,10 @@ class InspireClient:
                     arxiv_id = None
                     if 'arxiv_eprints' in metadata and metadata['arxiv_eprints']:
                         arxiv_id = metadata['arxiv_eprints'][0].get('value')
-                    
+
+                    print(arxiv_id)
+                    print(metadata)
+
                     paper = LHCbPaper(
                         title=metadata['titles'][0]['title'],
                         citations=metadata.get('citation_count', 0),

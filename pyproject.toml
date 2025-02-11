@@ -20,7 +20,7 @@ click = "^8.1.7"                  # CLI interface
 tqdm = "^4.62.3"                  # progress bars
 
 [tool.poetry.scripts]
-build-corpus = "scripts.build_lhcb_corpus:main"
+build-corpus = "scraper.scripts.build_lhcb_corpus:main"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^7.4.3"                 # testing

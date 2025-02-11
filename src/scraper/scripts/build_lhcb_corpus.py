@@ -1,7 +1,7 @@
 import click
 from loguru import logger
 from pathlib import Path
-from api_clients.inspire import InspireClient, LHCbPaper
+from scraper.api_clients.inspire import InspireClient, LHCbPaper
 from tqdm import tqdm
 from dataclasses import dataclass
 from typing import Optional, Sequence
