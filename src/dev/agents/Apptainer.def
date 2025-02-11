@@ -1,0 +1,27 @@
+Bootstrap: docker
+From: python:3.10-slim
+
+%labels
+    Author Blaise Delaney
+    Version 1.0
+
+%post
+    echo "Installing system dependencies..."
+    apt-get update && apt-get install -y \
+        wget \
+        gnupg \
+        chromium \
+        chromium-driver \
+        && rm -rf /var/lib/apt/lists/*
+
+    echo "Installing Python dependencies..."
+    mkdir -p /app
+    pip install --no-cache-dir -r /app/requirements.txt
+
+%files
+    requirements.txt /app/requirements.txt
+    lhcb_scraper.py /app/lhcb_scraper.py
+
+%environment
+    export PYTHONUNBUFFERED=1
+    export DISPLAY=:99
