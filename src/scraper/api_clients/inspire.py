@@ -21,6 +21,7 @@ class InspireClient:
         pdf_dir: Path = Path("data/pdfs"),
         source_dir: Path = Path("data/source"),
         expanded_tex_dir: Path = Path("data/expanded_tex"),
+        expanded_tex_nomacro_dir: Path = Path("data/expanded_tex_nomacro")
     ) -> None:
         """Initialize the INSPIRE-HEP client.
 
@@ -34,18 +35,22 @@ class InspireClient:
             Directory for storing LaTeX source files
         expanded_tex_dir : Path, default=Path("data/expanded_tex")
             Directory for storing expanded LaTeX files
+        expanded_text_nomacro_dir : Path, default=Path("data/expanded_tex_nomacro)
+            Directory for storing expanded LaTeX files with all user-defined macros removed
         """
         self.base_url = "https://inspirehep.net/api"
         self.abstract_dir = abstract_dir
         self.pdf_dir = pdf_dir
         self.source_dir = source_dir
         self.expanded_tex_dir = expanded_tex_dir
+        self.expanded_tex_nomacro_dir = expanded_tex_nomacro_dir
 
         for directory in [
             self.abstract_dir,
             self.pdf_dir,
             self.source_dir,
             self.expanded_tex_dir,
+            self.expanded_tex_nomacro_dir,
         ]:
             directory.mkdir(parents=True, exist_ok=True)
 
@@ -96,7 +101,7 @@ class InspireClient:
         params = params.copy()
         
         # Make initial request to get total number of papers
-        response = requests.get(f"{self.base_url}/literature", params=params)
+        response = requests.get(f"{self.base_url}/literature", params=params, timeout=10)
         response.raise_for_status()
         data = response.json()
         
@@ -110,7 +115,7 @@ class InspireClient:
             
             for page in tqdm(range(1, (total_hits // 250) + 2), desc="Fetching LHCb papers from INSPIRE API"):
                 params['page'] = page
-                response = requests.get(f"{self.base_url}/literature", params=params)
+                response = requests.get(f"{self.base_url}/literature", params=params, timeout=10)
                 response.raise_for_status()
                 
                 for hit in response.json()['hits']['hits']:
@@ -234,7 +239,7 @@ class InspireClient:
             return None
 
         try:
-            response = requests.get(paper.arxiv_pdf)
+            response = requests.get(paper.arxiv_pdf, timeout=10)
             response.raise_for_status()
 
             filepath = self.pdf_dir / f"{paper.arxiv_id}.pdf"
@@ -394,6 +399,9 @@ class InspireClient:
             return None
 
         try:
+<<<<<<< HEAD:src/scraping/inspire.py
+            response = requests.get(paper.latex_source, timeout=10)
+=======
             # Use arXiv's API endpoint instead of direct download
             source_url = f"http://export.arxiv.org/e-print/{paper.arxiv_id}"
             headers = {
@@ -410,6 +418,7 @@ class InspireClient:
                 verify=True,
                 headers=headers
             )
+>>>>>>> main:src/scraper/api_clients/inspire.py
             response.raise_for_status()
 
             # Check for CAPTCHA or HTML response
@@ -435,6 +444,11 @@ class InspireClient:
             source_file = self.source_dir / f"{paper.arxiv_id}_source.tar.gz"
             source_file.write_bytes(response.content)
 
+<<<<<<< HEAD:src/scraping/inspire.py
+            expanded_tex_path = self.extract_and_expand_latex(paper, source_file)
+            return expanded_tex_path
+        
+=======
             # Add exponential backoff for retries
             max_retries = 3
             for attempt in range(max_retries):
@@ -454,6 +468,7 @@ class InspireClient:
         except requests.Timeout:
             logger.error("Download timed out")
             return None
+>>>>>>> main:src/scraper/api_clients/inspire.py
         except requests.RequestException as e:
             logger.error(f"Failed to download source: {e}")
             return None
