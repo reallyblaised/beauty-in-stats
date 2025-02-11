@@ -7,7 +7,7 @@ from loguru import logger
 import subprocess
 import os
 from tqdm import tqdm
-from scraper.core.models import LHCbPaper
+from core.models import LHCbPaper
 import time
 import shutil
 import tarfile

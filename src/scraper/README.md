@@ -18,7 +18,7 @@ The scraper can be run using Docker or Apptainer. This README provides instructi
 ## Using Apptainer [preferred on SubMIT]
 
 1. **Build the Apptainer Image**:
-   Navigate to the directory `src/scraper/containers` and run the following command:
+   Navigate to the directory `src/scraper` and run the following command:
 
    ```bash
    apptainer build containers/lhcb-scraper-container.sif containers/Apptainer.def
