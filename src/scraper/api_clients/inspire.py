@@ -399,9 +399,6 @@ class InspireClient:
             return None
 
         try:
-<<<<<<< HEAD:src/scraping/inspire.py
-            response = requests.get(paper.latex_source, timeout=10)
-=======
             # Use arXiv's API endpoint instead of direct download
             source_url = f"http://export.arxiv.org/e-print/{paper.arxiv_id}"
             headers = {
@@ -418,7 +415,6 @@ class InspireClient:
                 verify=True,
                 headers=headers
             )
->>>>>>> main:src/scraper/api_clients/inspire.py
             response.raise_for_status()
 
             # Check for CAPTCHA or HTML response
@@ -444,11 +440,6 @@ class InspireClient:
             source_file = self.source_dir / f"{paper.arxiv_id}_source.tar.gz"
             source_file.write_bytes(response.content)
 
-<<<<<<< HEAD:src/scraping/inspire.py
-            expanded_tex_path = self.extract_and_expand_latex(paper, source_file)
-            return expanded_tex_path
-        
-=======
             # Add exponential backoff for retries
             max_retries = 3
             for attempt in range(max_retries):
@@ -468,7 +459,6 @@ class InspireClient:
         except requests.Timeout:
             logger.error("Download timed out")
             return None
->>>>>>> main:src/scraper/api_clients/inspire.py
         except requests.RequestException as e:
             logger.error(f"Failed to download source: {e}")
             return None
