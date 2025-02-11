@@ -280,20 +280,44 @@ def scrape_and_enrich_papers(
             )
             builder = CorpusBuilder(config)
             
+            # Create cleaned_tex directory
+            cleaned_tex_dir = output_dir / "boilerplate_free_tex"
+            cleaned_tex_dir.mkdir(parents=True, exist_ok=True)
+            
+            sections_to_remove = [
+                'Acknowledgements', 
+                'References',
+                'Bibliography',
+            ]
+            
             failed_downloads = []
-            for _, row in tqdm(df.iterrows(), desc="Downloading papers", total=len(df)):
+            for _, row in tqdm(df.iterrows(), desc="Downloading and processing papers", total=len(df)):
                 paper = LHCbPaper(**row.to_dict())
                 
                 try:
+                    # Download paper
                     success = builder.download_paper(paper)
                     if not success:
                         failed_downloads.append(paper.lhcb_paper_id)
+                        continue
+                    
+                    # Post-process LaTeX if available
+                    if paper.arxiv_id:
+                        expanded_tex = output_dir / "expanded_tex" / f"{paper.arxiv_id}.tex"
+                        if expanded_tex.exists():
+                            cleaned_tex = cleaned_tex_dir / f"{paper.arxiv_id}.tex"
+                            try:
+                                process_file(str(expanded_tex), str(cleaned_tex), sections_to_remove)
+                                logger.debug(f"Successfully cleaned LaTeX for {paper.arxiv_id}")
+                            except Exception as e:
+                                logger.error(f"Failed to clean LaTeX for {paper.arxiv_id}: {e}")
+                
                 except Exception as e:
                     failed_downloads.append(paper.lhcb_paper_id)
-                    logger.error(f"Error downloading paper '{paper.title}': {str(e)}")
+                    logger.error(f"Error processing paper '{paper.title}': {str(e)}")
             
             if failed_downloads:
-                logger.warning(f"Failed to download {len(failed_downloads)} papers")
+                logger.warning(f"Failed to process {len(failed_downloads)} papers")
     
     return df
 

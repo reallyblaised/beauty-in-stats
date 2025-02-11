@@ -10,6 +10,7 @@ from tqdm import tqdm
 from core.models import LHCbPaper
 import time
 import shutil
+import tarfile
 
 class InspireClient:
     """Client for interacting with the INSPIRE-HEP API."""
@@ -302,16 +303,7 @@ class InspireClient:
         paper_dir.mkdir(exist_ok=True)
 
         try:
-            # Test gzip file integrity before extraction
-            import gzip
-            try:
-                with gzip.open(source_file, 'rb') as test_file:
-                    test_file.read(1024)  # Try reading first 1KB
-            except Exception as e:
-                logger.error(f"Invalid gzip file {source_file}: {e}")
-                return None
-
-            with tarfile.open(source_file, "r:gz") as tar:
+            with tarfile.open(source_file) as tar:
                 # Check for suspicious paths before extraction
                 for member in tar.getmembers():
                     if member.name.startswith('/') or '..' in member.name:
