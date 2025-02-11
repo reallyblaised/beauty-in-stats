@@ -36,3 +36,6 @@ data/
 # IDE specific
 .idea/
 .vscode/
+
+# Poetry specific
+poetry.lock
