@@ -2,7 +2,7 @@
 name = "beautyinstats"
 version = "0.1.0"
 description = "LLM-powered assistant for the statistical analysis of data collected with the LHCb experiment at CERN"
-authors = ["reallyblaised <blaiserd at proton.me>", "jamesmcgreivy <mcgreivy at mit.edu>"]
+authors = ["reallyblaised <blaiserd at proton.me>"]
 readme = "README.md"              
 license = "MIT"                   
 packages = [
@@ -18,10 +18,9 @@ pydantic-settings = "^2.6.1"      # settings management
 loguru = "^0.7.0"                 # logging
 click = "^8.1.7"                  # CLI interface
 tqdm = "^4.62.3"                  # progress bars
-docling = "^2.14.0"               # linguistic processing
 
 [tool.poetry.scripts]
-build-corpus = "scripts.build_lhcb_corpus:main"
+build-corpus = "scraper.scripts.build_lhcb_corpus:main"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^7.4.3"                 # testing

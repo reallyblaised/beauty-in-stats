@@ -7,7 +7,7 @@ from loguru import logger
 import subprocess
 import os
 from tqdm import tqdm
-from core.models import LHCbPaper
+from scraper.core.models import LHCbPaper
 import time
 import shutil
 import tarfile
@@ -21,7 +21,6 @@ class InspireClient:
         pdf_dir: Path = Path("data/pdfs"),
         source_dir: Path = Path("data/source"),
         expanded_tex_dir: Path = Path("data/expanded_tex"),
-        expanded_tex_nomacro_dir: Path = Path("data/expanded_tex_nomacro")
     ) -> None:
         """Initialize the INSPIRE-HEP client.
 
@@ -35,22 +34,18 @@ class InspireClient:
             Directory for storing LaTeX source files
         expanded_tex_dir : Path, default=Path("data/expanded_tex")
             Directory for storing expanded LaTeX files
-        expanded_text_nomacro_dir : Path, default=Path("data/expanded_tex_nomacro)
-            Directory for storing expanded LaTeX files with all user-defined macros removed
         """
         self.base_url = "https://inspirehep.net/api"
         self.abstract_dir = abstract_dir
         self.pdf_dir = pdf_dir
         self.source_dir = source_dir
         self.expanded_tex_dir = expanded_tex_dir
-        self.expanded_tex_nomacro_dir = expanded_tex_nomacro_dir
 
         for directory in [
             self.abstract_dir,
             self.pdf_dir,
             self.source_dir,
             self.expanded_tex_dir,
-            self.expanded_tex_nomacro_dir,
         ]:
             directory.mkdir(parents=True, exist_ok=True)
 
@@ -101,7 +96,7 @@ class InspireClient:
         params = params.copy()
         
         # Make initial request to get total number of papers
-        response = requests.get(f"{self.base_url}/literature", params=params, timeout=10)
+        response = requests.get(f"{self.base_url}/literature", params=params)
         response.raise_for_status()
         data = response.json()
         
@@ -115,7 +110,7 @@ class InspireClient:
             
             for page in tqdm(range(1, (total_hits // 250) + 2), desc="Fetching LHCb papers from INSPIRE API"):
                 params['page'] = page
-                response = requests.get(f"{self.base_url}/literature", params=params, timeout=10)
+                response = requests.get(f"{self.base_url}/literature", params=params)
                 response.raise_for_status()
                 
                 for hit in response.json()['hits']['hits']:
@@ -123,7 +118,10 @@ class InspireClient:
                     arxiv_id = None
                     if 'arxiv_eprints' in metadata and metadata['arxiv_eprints']:
                         arxiv_id = metadata['arxiv_eprints'][0].get('value')
-                    
+
+                    print(arxiv_id)
+                    print(metadata)
+
                     paper = LHCbPaper(
                         title=metadata['titles'][0]['title'],
                         citations=metadata.get('citation_count', 0),
@@ -239,7 +237,7 @@ class InspireClient:
             return None
 
         try:
-            response = requests.get(paper.arxiv_pdf, timeout=10)
+            response = requests.get(paper.arxiv_pdf)
             response.raise_for_status()
 
             filepath = self.pdf_dir / f"{paper.arxiv_id}.pdf"

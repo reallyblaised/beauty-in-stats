@@ -1,12 +1,11 @@
 import click
 from loguru import logger
 from pathlib import Path
-from api_clients.inspire import InspireClient, LHCbPaper
+from scraper.api_clients.inspire import InspireClient, LHCbPaper
 from tqdm import tqdm
 from dataclasses import dataclass
 from typing import Optional, Sequence
-import expand_latex_macros
-import os
+
 
 @dataclass(frozen=True, slots=True)
 class CorpusConfig:
@@ -42,43 +41,13 @@ class CorpusBuilder:
 
     def _init_inspire_client(self) -> InspireClient:
         """Initialize INSPIRE client with configured directories."""
+
         return InspireClient(
             abstract_dir=self.config.output_dir / "abstracts",
             pdf_dir=self.config.output_dir / "pdfs",
             source_dir=self.config.output_dir / "source",
             expanded_tex_dir=self.config.output_dir / "expanded_tex",
-            expanded_tex_nomacro_dir=self.config.output_dir / "expanded_tex_nomacro"
         )
-    
-    def remove_all_macros(self, tex_path: Path):
-        """Opens tex_path.tex, reads in the LaTeX source and replaces all user-defined macros with their raw LaTeX definitions. Creates a new
-        
-        Parameters
-        ------------
-        tex_path : LHCbPaper
-            Path to .tex source
-
-        Returns
-        ------------
-        Path
-            Path to newly created no macro LaTeX source, or None if processing failed
-        """
-        try:
-            with open(tex_path, "r") as f:
-                tex_src = f.read()
-                f.close()
-            tex_nomacro_src = expand_latex_macros.expand_latex_macros(tex_src, verbose=False, timeout=5)
-            
-            expanded_tex_nomacro_dir = self.config.output_dir / "expanded_tex_nomacro"
-            tex_nomacro_path = os.path.join(expanded_tex_nomacro_dir, tex_path.name)
-            with open(tex_nomacro_path, "w") as f:
-                f.write(tex_nomacro_src)
-                f.close()
-            return tex_nomacro_path
-        
-        except Exception as e:
-            logger.error(f"Failed to expanded LaTeX macros: {e}")
-            return None
 
     def download_paper(self, paper: LHCbPaper) -> bool:
         """Download PDF and LaTeX source for a single paper.
@@ -101,14 +70,13 @@ class CorpusBuilder:
 
         if paper.latex_source:
             source_path = self.client.download_paper_source(paper)
-            source_nomacro_path = self.remove_all_macros(source_path)
-            if source_nomacro_path:
-                logger.debug(f"Downloaded, expanded, and removed all macros from source: {source_path}")
+            if source_path:
+                logger.debug(f"Downloaded and expanded source: {source_path}")
                 success = True
-            
 
         if paper.abstract:
             abstract_path = self.client.download_abstract(paper)
+
             if abstract_path:
                 logger.debug(f"Downloaded abstract: {abstract_path}")
                 success = True
@@ -170,6 +138,7 @@ class CorpusBuilder:
                     + "\n".join(f"- {title}" for title in failed_titles)
                 )
 
+
 def validate_date(
     ctx: click.Context, param: click.Parameter, value: Optional[str]
 ) -> Optional[str]:
@@ -203,6 +172,7 @@ def validate_date(
     except (ValueError, AssertionError):
         raise click.BadParameter("Date must be in YYYY-MM-DD format")
 
+
 def validate_paper_count(
     ctx: click.Context, param: click.Parameter, value: Optional[int]
 ) -> Optional[int]:
@@ -226,6 +196,7 @@ def validate_paper_count(
     if value is not None and value <= 0:
         raise click.BadParameter("Number of papers must be positive")
     return value
+
 
 @click.command()
 @click.option(

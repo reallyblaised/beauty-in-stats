@@ -3,7 +3,6 @@ from pydantic import BaseModel, Field
 
 class LHCbPaper(BaseModel):
     """Model representing an LHCb paper with its metadata."""
-    
     lhcb_paper_id: str = Field(..., description="Unique identifier for the paper")
     title: str = Field(..., description="Paper title")
     arxiv_id: str = Field(None, description="arXiv identifier if available")
