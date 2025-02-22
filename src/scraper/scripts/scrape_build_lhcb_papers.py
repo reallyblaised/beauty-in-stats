@@ -13,9 +13,8 @@ from loguru import logger
 from api_clients.inspire import InspireClient
 from core.models import LHCbPaper
 from scripts.build_lhcb_corpus import CorpusBuilder, CorpusConfig
-
-#from scripts.post_process_latex import process_file
-from post_process_latex import process_file
+from scripts.post_process_latex import process_file
+#from post_process_latex import process_file
 
 from tqdm import tqdm
 import requests

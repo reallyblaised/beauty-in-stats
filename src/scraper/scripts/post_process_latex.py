@@ -7,7 +7,7 @@ def remove_headers(tex):
     """
     Remove all content before the abstract or titlepage
     """
-    substrings = ["\\maketitle", "\\end{titlepage}", "\\end{abstract}", "\\abstract"]
+    substrings = ["\\maketitle", "\\end{titlepage}", "\\end{abstract}", "\\abstract", "\\begin{document}"]
     max_index = 0
     for substring in substrings:
         index = tex.rfind(substring) + len(substring)
@@ -45,6 +45,22 @@ def remove_boilerplate(tex):
     tex = re.sub(pattern, "", tex)
     pattern = r"\\begin{thebibliography}(?:\n|.)*\\end{thebibliography}"
     tex = re.sub(pattern, "", tex)
+
+    # Get rid of extra junk commands
+    pattern = r"\\noindent"
+    tex = re.sub(pattern, "", tex)
+    pattern = r"\\bigskip"
+    tex = re.sub(pattern, "", tex)
+    pattern = r"\\mbox\{~\}"
+    tex = re.sub(pattern, "", tex)
+    pattern = r"\\clearpage"
+    tex = re.sub(pattern, "", tex)
+    pattern = r"\\twocolumn"
+    tex = re.sub(pattern, "", tex)
+    pattern = r"\\onecolumn"
+    tex = re.sub(pattern, "", tex)
+    pattern = r"\\tableofcontents"
+    tex = re.sub(pattern, "", tex)
     
     return tex
 
@@ -58,6 +74,10 @@ def remove_lhcb_content(tex):
     pattern = r"[a-zA-Z.-]+(?:~[a-zA-Z-\\ \{\}\"\'\`]*)+\$\^\{[a-zA-Z0-9,]+\}\$[\,.][\s\n]*"
     tex = re.sub(pattern, "", tex)
     pattern = r"\$\s*\^\{[\w\d\s]+\}\$.*\\"
+    tex = re.sub(pattern, "", tex)
+    pattern = r"\\begin\s*{\s*flushleft\s*}.*?\\end\s*{\s*flushleft\s*}"
+    tex = re.sub(pattern, "", tex, flags=re.DOTALL)
+    pattern = r'\\centerline\s*\{\s*(\\[a-zA-Z]+\s*)+.*\}'
     tex = re.sub(pattern, "", tex)
     return tex
 
