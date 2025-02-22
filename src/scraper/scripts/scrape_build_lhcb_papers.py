@@ -286,7 +286,8 @@ def scrape_and_enrich_papers(
             cleaned_tex_dir.mkdir(parents=True, exist_ok=True)
             
             sections_to_remove = [
-                'Acknowledgements', 
+                'Acknowledgements',
+                'Acknowledgments',
                 'References',
                 'Bibliography',
             ]
