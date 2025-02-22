@@ -23,3 +23,4 @@ scikit-learn
 pyarrow
 loguru
 tqdm
+expand-latex-macros>=1.1.1
