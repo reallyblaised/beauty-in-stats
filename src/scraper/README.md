@@ -11,7 +11,7 @@ The scraper can be run using Docker or Apptainer. This README provides instructi
 
 ## Prerequisites
 
-- **Apptainer**: Ensure Apptainer is installed. You can find installation instructions [here](https://apptainer.org/docs/user/quickstart.html).
+- **Apptainer**: Ensure Apptainer is installed. You can find installation instructions [here](https://apptainer.org/docs/admin/main/installation.html).
 - **NVIDIA GPU**: If you want to use GPU acceleration, ensure you have an NVIDIA GPU and the necessary drivers installed.
 - **Docker** [Optional]: Ensure Docker is installed and running on your machine.
 
