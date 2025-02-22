@@ -40,4 +40,6 @@ data/
 # Poetry specific
 poetry.lock
 
+# Apptainer specific
 *.sif
+*.img
