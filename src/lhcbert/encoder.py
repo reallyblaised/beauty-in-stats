@@ -15,7 +15,9 @@ class EncoderModel:
 
     def __init__(
         self,
-        model_name: str = "answerdotai/ModernBERT-base",
+        model_name: str,
+        base_model_name: str = "answerdotai/ModernBERT-large",
+        cache_dir: str = "/ceph/submit/data/user/b/blaised/cache",
         device: Union[str, None] = None,
     ) -> None:
         """Initialize the model."""
@@ -23,8 +25,28 @@ class EncoderModel:
             self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         else:
             self.device = torch.device(device)
-        self.tokenizer = AutoTokenizer.from_pretrained(model_name)
-        self.model = ModernBertModel.from_pretrained(model_name).to(self.device)
+        self.cache_dir = cache_dir
+
+        # tokenizer and model
+        self.tokenizer = AutoTokenizer.from_pretrained(
+            base_model_name,
+            cache_dir=self.cache_dir,
+        )
+
+        # book the encoding model
+        if self.device.type == "cuda":
+            self.model = ModernBertModel.from_pretrained(
+                model_name,
+                cache_dir=self.cache_dir,
+                attn_implementation="flash_attention_2",
+            ).to("cuda")
+        else:
+            self.model = ModernBertModel.from_pretrained(
+                model_name,
+                cache_dir=self.cache_dir,
+            )
+
+        # sanity device check
         assert (
             self.model.device.type == self.device.type
         ), f"Model is on {self.model.device.type}, but expected {self.device.type}."
@@ -44,8 +66,9 @@ class EncoderModel:
             with torch.no_grad():
                 outputs = self.model(**inputs)
 
-                # Fetch the [CLS] representation in the last embedding layer - following BERT
-                cls_batch_embeddings = outputs.last_hidden_state[:, 0, :]
+                # Fetch the [CLS] representation in the last embedding layer - following BERT - see ModernBertConfig() in Transformers
+                cls_batch_embeddings = outputs.last_hidden_state[:, 0, :]  # checked
+
                 embeddings.append(cls_batch_embeddings.cpu())
 
         return torch.cat(embeddings, dim=0)
