@@ -138,6 +138,9 @@ def process_file(input_file, output_file, sections_to_remove=None):
         output_file (str): Path to output cleaned file
         sections_to_remove (list): Optional list of section names whose content should be removed
     """
+
+    print("Input File: " , input_file)
+
     with open(input_file, 'r') as f:
         tex = f.read()
 
