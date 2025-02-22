@@ -271,18 +271,18 @@ def clean_junk(tex):
     pattern = r"(?<!\\)%.*"
     tex = re.sub(pattern, "", tex)
 
+    # Get rid of any bibliography
+    pattern = r"\\bibitem\{.+\}(?:.|\n)*\\EndOfBibitem"
+    tex = re.sub(pattern, "", tex)
+    pattern = r"\\begin{thebibliography}(?:\n|.)*\\end{thebibliography}"
+    tex = re.sub(pattern, "", tex)
+
     # LHCb junk
     pattern = r"\\centerline[\n\s]*\{[\n\s]*\\large[\n\s]*\\bf[\n\s]*LHCb[\n\s]*collaboration[\n\s]*\}[\n\s]*\\begin[\n\s]*\{[\n\s]*flushleft[\n\s]*\}(?:\n|.)*\{[\n\s]*\\footnotesize(?:\n|.)*\}[\n\s]*\\end[\n\s]*\{[\n\s]*flushleft[\n\s]*\}"
     tex = re.sub(pattern, "", tex)
     pattern = r"[a-zA-Z.-]+(?:~[a-zA-Z-\\ \{\}\"\'\`]*)+\$\^\{[a-zA-Z0-9,]+\}\$[\,.][\s\n]*"
     tex = re.sub(pattern, "", tex)
     pattern = r"\$\s*\^\{[\w\d\s]+\}\$.*\\"
-    tex = re.sub(pattern, "", tex)
-
-    # Get rid of any bibliography
-    pattern = r"\\bibitem\{.+\}(?:.|\n)*\\EndOfBibitem"
-    tex = re.sub(pattern, "", tex)
-    pattern = r"\\begin{thebibliography}(?:\n|.)*\\end{thebibliography}"
     tex = re.sub(pattern, "", tex)
 
     # Remove excess whitespace

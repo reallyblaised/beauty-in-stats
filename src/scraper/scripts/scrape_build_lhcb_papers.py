@@ -281,7 +281,7 @@ def scrape_and_enrich_papers(
             builder = CorpusBuilder(config)
             
             # Create cleaned_tex directory
-            cleaned_tex_dir = output_dir / "boilerplate_free_tex"
+            cleaned_tex_dir = output_dir / "cleaned_tex"
             cleaned_tex_dir.mkdir(parents=True, exist_ok=True)
             
             sections_to_remove = [

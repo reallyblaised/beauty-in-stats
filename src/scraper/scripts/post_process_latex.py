@@ -1,109 +1,71 @@
-import re
+import regex as re
+import csv
+import expand_latex_macros
+import os
 
-def remove_latex_commands(text):
-    """Remove LaTeX commands and environments that are boilerplate"""
-    # Remove document class, packages and other preamble
-    text = re.sub(r'\\documentclass.*?\n', '', text)
-    text = re.sub(r'\\usepackage.*?\n', '', text)
-    text = re.sub(r'\\def\\.*?\n', '', text)
-    
-    # Remove author list and affiliations
-    text = re.sub(r'\\begin{flushleft}.*?\\end{flushleft}', '', text, flags=re.DOTALL)
-    
-    # Remove bibliography and references
-    text = re.sub(r'\\bibliographystyle{.*?}', '', text)
-    text = re.sub(r'\\bibliography{.*?}', '', text)
-    text = re.sub(r'\\~cite{.*?}', '', text)
-    
-    # Remove appendices
-    text = re.sub(r'\\begin{appendices}.*?\\end{appendices}', '', text, flags=re.DOTALL)
-    
-    return text
+def remove_headers(tex):
+    """
+    Remove all content before the abstract or titlepage
+    """
+    substrings = ["\\maketitle", "\\end{titlepage}", "\\end{abstract}", "\\abstract"]
+    max_index = 0
+    for substring in substrings:
+        index = tex.rfind(substring) + len(substring)
+        if index > max_index:
+            max_index = index
+    return tex[max_index:]
 
-def expand_symbols(text, symbol_map):
+def remove_boilerplate(tex):
     """
-    Expand LHCb shorthand symbols using the provided mapping
-    symbol_map should be a dict of {shorthand: expanded_form}
+    Remove all LaTeX boilerplate code, comments, and bibliographies
     """
-    for shorthand, expanded in symbol_map.items():
-        # Handle both \command and \command{args} forms
-        pattern = f'\\\\{shorthand}(?![a-zA-Z])'
-        text = re.sub(pattern, expanded, text)
-        
-        pattern_with_args = f'\\\\{shorthand}{{(.*?)}}'
-        text = re.sub(pattern_with_args, f'{expanded}\\1', text)
-        
-    return text
-
-def remove_content_before_intro(text):
-    """
-    Remove all content before the Introduction section.
-    """
-    intro_patterns = [
-        r'\\section{Introduction}',
-        r'\\section\*{Introduction}',
+    patterns = [
+        r"\\newpage", r"\\cleardoublepage", r"\\pagestyle\{[\w\d]+\}",  r"\\setcounter\{[\w\d]+\}\{\d+\}", 
+        r"\\pagenumbering\{[\w\d]+\}", r"\\bibliographystyle\{[\w\d]+\}", r"\\end\{document\}", r"\\bibliography",
     ]
-    
-    # Find the earliest Introduction section
-    start_pos = None
-    for pattern in intro_patterns:
-        match = re.search(pattern, text)
-        if match and (start_pos is None or match.start() < start_pos):
-            start_pos = match.start()
-    
-    if start_pos is not None:
-        return text[start_pos:]
-    return text
+    for pattern in patterns:
+        tex = re.sub(pattern, "", tex)
 
-def find_collab_section(text):
-    """
-    Find the LHCb collaboration section start and appropriate end point.
-    Returns (start_pos, end_pos) or None if not found.
-    """
-    # Various patterns that might indicate the start of collaboration section
-    collab_patterns = [
-        r'\\centerline\s*{\s*\\large\s*\\bf\s*LHCb collaboration\s*}',
-        r'\\begin{center}\s*\\large\s*\\bf\s*LHCb collaboration',
-        r'\\section\*?\{LHCb collaboration\}'
-    ]
+    # Remove all macros
+    pattern = r"\\def\s*\\(\w+)\s*((?:#\d\s*)*)\s*({(?:[^{}]*+|(?3))*})"
+    tex = re.sub(pattern, "", tex)
+    pattern = r"\\newcommand\*?\s*{?\s*\\(\w+)\s*}?\s*((?:\[\s*\d+\s*\])*)\s*({(?:[^{}]*+|(?3))*})"
+    tex = re.sub(pattern, "", tex)
+    pattern = r"\\renewcommand\*?\s*{?\s*\\(\w+)\s*}?\s*((?:\[\s*\d+\s*\])*)\s*({(?:[^{}]*+|(?3))*})"
+    tex = re.sub(pattern, "", tex)
     
-    # Find the earliest match among all patterns
-    start_pos = None
-    for pattern in collab_patterns:
-        match = re.search(pattern, text)
-        if match and (start_pos is None or match.start() < start_pos):
-            start_pos = match.start()
-    
-    if start_pos is None:
-        return None
-    
-    # Look for end markers after the start position
-    end_markers = [
-        r'\\begin\s*{appendices}',
-        r'\\section\*?\{Appendix',
-        r'\\appendix'
-    ]
-    
-    # Find the earliest end marker after start_pos
-    end_pos = len(text)
-    text_after_start = text[start_pos:]
-    
-    for marker in end_markers:
-        match = re.search(marker, text_after_start)
-        if match:
-            possible_end = start_pos + match.start()
-            end_pos = min(end_pos, possible_end)
-    
-    return (start_pos, end_pos)
+    # Remove all comments
+    pattern = r"\\begin\s*\{\s*comment\s*\}(.*?)\\end\s*\{\s*comment\s*\}"
+    tex = re.sub(pattern, "", tex, flags=re.DOTALL)
+    pattern = r"(?<!\\)%.*"
+    tex = re.sub(pattern, "", tex)
 
-def remove_section_content(text, section_names):
+    # Get rid of any bibliography
+    pattern = r"\\bibitem\{.+\}(?:.|\n)*\\EndOfBibitem"
+    tex = re.sub(pattern, "", tex)
+    pattern = r"\\begin{thebibliography}(?:\n|.)*\\end{thebibliography}"
+    tex = re.sub(pattern, "", tex)
+    
+    return tex
+
+def remove_lhcb_content(tex):
+    """
+    Remove all LHCb collab sections, lists of universities, etc
+    """
+    # LHCb junk
+    pattern = r"\\centerline[\n\s]*\{[\n\s]*\\large[\n\s]*\\bf[\n\s]*LHCb[\n\s]*collaboration[\n\s]*\}[\n\s]*\\begin[\n\s]*\{[\n\s]*flushleft[\n\s]*\}(?:\n|.)*\{[\n\s]*\\footnotesize(?:\n|.)*\}[\n\s]*\\end[\n\s]*\{[\n\s]*flushleft[\n\s]*\}"
+    tex = re.sub(pattern, "", tex)
+    pattern = r"[a-zA-Z.-]+(?:~[a-zA-Z-\\ \{\}\"\'\`]*)+\$\^\{[a-zA-Z0-9,]+\}\$[\,.][\s\n]*"
+    tex = re.sub(pattern, "", tex)
+    pattern = r"\$\s*\^\{[\w\d\s]+\}\$.*\\"
+    tex = re.sub(pattern, "", tex)
+    return tex
+
+def remove_section_content(tex, section_names):
     """
     Remove all content between a section command containing section_name and the next section command
     or end of document.
     """
-    # First remove everything before Introduction
-    text = remove_content_before_intro(text)
-    
     # Create a pattern that matches any section command followed by the section name
     # This handles \section, \section*, \subsection, etc.
     section_pattern = r'\\(?:sub)*section\*?{([^}]*)}'
@@ -112,7 +74,7 @@ def remove_section_content(text, section_names):
     page_break_pattern = r'\\(?:new|clear)page'
     
     # Find all sections in the document
-    sections = list(re.finditer(section_pattern, text))
+    sections = list(re.finditer(section_pattern, tex))
     
     # Process regular sections
     regions_to_remove = []
@@ -123,14 +85,14 @@ def remove_section_content(text, section_names):
             start_pos = match.start()
             
             # Find the earliest ending point
-            end_pos = len(text)
+            end_pos = len(tex)
             
             # Check for next section
             if i < len(sections) - 1:
                 end_pos = min(end_pos, sections[i + 1].start())
             
             # Check for page breaks
-            page_break_match = re.search(page_break_pattern, text[start_pos:])
+            page_break_match = re.search(page_break_pattern, tex[start_pos:])
             if page_break_match:
                 possible_end = start_pos + page_break_match.start()
                 end_pos = min(end_pos, possible_end)
@@ -139,67 +101,33 @@ def remove_section_content(text, section_names):
             print(f"Position: {start_pos} to {end_pos}")
             regions_to_remove.append((start_pos, end_pos))
     
-    # Handle collaboration section
-    collab_region = find_collab_section(text)
-    if collab_region:
-        start_pos, end_pos = collab_region
-        print("\nFound collaboration section:")
-        print(f"Position: {start_pos} to {end_pos}")
-        regions_to_remove.append((start_pos, end_pos))
-    
     # Remove all regions in reverse order
-    cleaned_content = text
+    cleaned_content = tex
     for start, end in sorted(regions_to_remove, reverse=True):
         cleaned_content = cleaned_content[:start] + cleaned_content[end:]
-    
-    # Clean up multiple newlines
-    cleaned_content = re.sub(r'\n\s*\n\s*\n', '\n\n', cleaned_content)
-    
     return cleaned_content.strip()
 
-def clean_text(text, symbol_map, sections_to_remove=None):
+current_directory = os.path.dirname(os.path.abspath(__file__))
+with open(os.path.join(current_directory, 'lhcb_symbols.csv'), mode='r') as file:
+    reader = csv.reader(file)
+    lhcb_symbols = next(reader)
+
+def clean_tex(tex, sections_to_remove=None):
     """
     Main cleaning function
     
     Args:
-        text (str): Input LaTeX text
-        symbol_map (dict): Mapping of symbols to expand
+        tex (str): Input LaTeX tex
         sections_to_remove (list): List of section names whose content should be removed
     """
-    # First remove boilerplate LaTeX
-    text = remove_latex_commands(text)
-    
-    # Remove content of specified sections
-    text = remove_section_content(text, sections_to_remove)
-    
-    # # Expand symbols using the mapping
-    # text = expand_symbols(text, symbol_map)
-    
-    # # Remove remaining LaTeX formatting
-    # text = re.sub(r'\\begin{document}', '', text)
-    # text = re.sub(r'\\end{document}', '', text)
-    # text = re.sub(r'\\section{.*?}', '', text)
-    # text = re.sub(r'\\subsection{.*?}', '', text)
-    
-    # # Remove extra whitespace
-    # text = re.sub(r'\n\s*\n', '\n\n', text)
-    # text = text.strip()
-    
-    return text
-
-# Example symbol map - extend this with the full LHCb mapping
-SYMBOL_MAP = {
-    'lhcb': 'LHCb',
-    'mev': 'MeV',
-    'gev': 'GeV',
-    'jpsi': 'J/ψ',
-    'Bz': 'B⁰',
-    'Bp': 'B⁺',
-    'Bm': 'B⁻',
-    'epem': 'e⁺e⁻',
-    'mumu': 'μ⁺μ⁻',
-    # Add more mappings as needed
-}
+    tex = expand_latex_macros.expand_latex_macros(tex, commands_dont_expand=lhcb_symbols)
+    tex = remove_headers(tex)
+    tex = remove_boilerplate(tex)
+    tex = remove_lhcb_content(tex)
+    tex = remove_section_content(tex, sections_to_remove)
+    # Remove excessive newlines
+    tex = re.sub(r"\n[\s]+", "\n", tex)
+    return tex
 
 def process_file(input_file, output_file, sections_to_remove=None):
     """
@@ -211,9 +139,9 @@ def process_file(input_file, output_file, sections_to_remove=None):
         sections_to_remove (list): Optional list of section names whose content should be removed
     """
     with open(input_file, 'r') as f:
-        text = f.read()
-        
-    cleaned = clean_text(text, SYMBOL_MAP, sections_to_remove)
+        tex = f.read()
+
+    cleaned = clean_tex(tex, sections_to_remove)
     
     with open(output_file, 'w') as f:
         f.write(cleaned)
@@ -222,6 +150,6 @@ def process_file(input_file, output_file, sections_to_remove=None):
 if __name__ == '__main__':
     sections_to_remove = ['Acknowledgements', 'References']
     process_file(
-        '/Users/blaisedelaney/PersonalProjects/beauty-in-stats/data/expanded_tex/2212.09153.tex',
+        '/work/submit/mcgreivy/beauty-in-stats/src/scraper/data/expanded_tex/2501.12611.tex',
         'test_cleaned.tex', 
     sections_to_remove)
