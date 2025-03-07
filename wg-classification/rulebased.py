@@ -4,14 +4,15 @@ from particle import PDGID
 
 
 PDG2LaTeXNameMap, LaTeX2PDGNameMap = DirectionalMaps("PDGID", "LaTexName", converters=(PDGID, str))
+PDG2EvtGenNameMap, EvtGen2PDGNameMap = DirectionalMaps("PDGID", "EVTGENNAME", converters=(PDGID, str))
 
 def count_charm(pdgid):
     """
     This function counts the number of charm quarks in a particle.
     For charm tetraquarks or pentaquarks, this returns 1.
     """
-    if pdgid.has_charm:
-        if pdgid.is_meson and pdgid.is_self_conjugate:
+    if pdgid.pdgid.has_charm:
+        if pdgid.pdgid.is_meson and pdgid.is_self_conjugate:
             return 2
         else:
             return 1
@@ -24,6 +25,17 @@ def count_bottom(part):
     p = Particle.finditer(latex_name=part)
     return next(p).has_bottom
 
+def get_pdgids(cildren):
+    ids = []
+    for c in children:
+        try:
+            idc = Particle.from_pdgid(int(c))
+            ids.append(idc)
+        except Exception as e:
+            print(e)
+            if c in ["jet", "jets"]:
+                ids.append(c)
+
 def decaybased_classifier(production, parent, children):
     """
     This function classifies a decay chain based on the considered decay chain.
@@ -35,27 +47,29 @@ def decaybased_classifier(production, parent, children):
     differ form the real assignment.
     """
     # Convert LaTeX names to PDGIDs
-    pdgid_parent = LaTeX2PDGNameMap[parent]
-    pdgid_children = [LaTeX2PDGNameMap[child] for child in children]
-    if any(c.has_top in pdgid_children) or any(c in children for c in ["jet", "jets"]) or pdgid_parent.is_gauge_boson_or_higgs or children==[]:
-        return "QEE"
-    if pdgid_parent.has_charm & (not pdgid_parent.has_bottom) & (not pdgid_parent.is_self_conjugate): # ccbar goes to quarkonia
+    # pdgid_parent = EvtGen2PDGNameMap[parent]
+    # pdgid_children = [EvtGen2PDGNameMap[child] for child in children]
+    pdgid_parent = Particle.from_pdgid(int(parent))
+    pdgid_children = [Particle.from_pdgid(int(child)) for child in children]
+    if any(c.pdgid.has_top for c in pdgid_children) or any(c in children for c in ["jet", "jets"]) or pdgid_parent.pdgid.is_gauge_boson_or_higgs or children==[]:
+        return "qcd_electroweak_and_exotica"
+    if pdgid_parent.pdgid.has_charm & (not pdgid_parent.pdgid.has_bottom) & (not pdgid_parent.is_self_conjugate): # ccbar goes to quarkonia
         # Is there exactly one c and no Bc?
-        return "Charm"
+        return "charm_physics"
     if pdgid_parent.is_self_conjugate:
         return "Quarkonia"
-    if not (production=="pp" ):
-        return "HeavyIon"
-    if any(abs(c) in [12, 14, 16] for c in pdgid_children):
-        return "SL"
-    radiative = any(abs(c)==22 for c in pdgid_children)
-    leptonic = any(c.is_lepton for c in pdgid_children)
-    if radiative | leptonic:
+    if not (production=="pp"):
+        return "ions_and_fixed_target"
+    if any(abs(c.pdgid) in [12, 14, 16] for c in pdgid_children):
+        return "semileptonic_b_decays"
+    radiative = any(abs(c.pdgid)==22 for c in pdgid_children)
+    leptonic = any(c.pdgid.is_lepton for c in pdgid_children)
+    if radiative or leptonic:
         # Missing forbidden decays but maybe the leptonic rule catches them
-        return "RD"
+        return "rare_decays"
     charms = [count_charm(c) for c in pdgid_children]
     if 1 in charms:
-        return "B2OC"
+        return "b_decays_to_open_charm"
     if 2 in charms:
-        return "B2C"
-    return "B2noC"
+        return "b_decays_to_charmonia"
+    return "charmless_b_hadron_decays"
