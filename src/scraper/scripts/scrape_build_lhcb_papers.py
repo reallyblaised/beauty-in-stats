@@ -13,8 +13,7 @@ from loguru import logger
 from api_clients.inspire import InspireClient
 from core.models import LHCbPaper
 from scripts.build_lhcb_corpus import CorpusBuilder, CorpusConfig
-from scripts.post_process_latex import process_file
-#from post_process_latex import process_file
+from scripts.post_process_latex import clean_and_expand_macros
 
 from tqdm import tqdm
 import requests
@@ -282,17 +281,6 @@ def scrape_and_enrich_papers(
             )
             builder = CorpusBuilder(config)
             
-            # Create cleaned_tex directory
-            cleaned_tex_dir = output_dir / "cleaned_tex"
-            cleaned_tex_dir.mkdir(parents=True, exist_ok=True)
-            
-            sections_to_remove = [
-                'Acknowledgements',
-                'Acknowledgments',
-                'References',
-                'Bibliography',
-            ]
-            
             failed_downloads = []
             for _, row in tqdm(df.iterrows(), desc="Downloading and processing papers", total=len(df)):
                 paper = LHCbPaper(**row.to_dict())
@@ -303,17 +291,6 @@ def scrape_and_enrich_papers(
                     if not success:
                         failed_downloads.append(paper.lhcb_paper_id)
                         continue
-                    
-                    # Post-process LaTeX if available
-                    if paper.arxiv_id:
-                        expanded_tex = output_dir / "expanded_tex" / f"{paper.arxiv_id}.tex"
-                        if expanded_tex.exists():
-                            cleaned_tex = cleaned_tex_dir / f"{paper.arxiv_id}.tex"
-                            try:
-                                process_file(str(expanded_tex), str(cleaned_tex), sections_to_remove)
-                                logger.debug(f"Successfully cleaned LaTeX for {paper.arxiv_id}")
-                            except Exception as e:
-                                logger.error(f"Failed to clean LaTeX for {paper.arxiv_id}: {e}")
                 
                 except Exception as e:
                     failed_downloads.append(paper.lhcb_paper_id)
@@ -321,6 +298,18 @@ def scrape_and_enrich_papers(
             
             if failed_downloads:
                 logger.warning(f"Failed to process {len(failed_downloads)} papers")
+    
+    # Create cleaned_tex directory
+    tex_dir = output_dir / "expanded_tex"
+    cleaned_tex_dir = output_dir / "cleaned_tex"
+    cleaned_tex_dir.mkdir(parents=True, exist_ok=True)
+    sections_to_remove = [
+        'Acknowledgements',
+        'Acknowledgments',
+        'References',
+        'Bibliography',
+    ]
+    clean_and_expand_macros(tex_dir, cleaned_tex_dir, sections_to_remove)
     
     return df
 

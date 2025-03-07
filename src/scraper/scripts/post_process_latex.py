@@ -1,7 +1,15 @@
 import regex as re
 import csv
 import expand_latex_macros
+import signal
+import time
 import os
+import concurrent.futures
+from concurrent.futures import ProcessPoolExecutor
+from itertools import chain
+from tqdm import tqdm
+from functools import partial
+from pathlib import Path
 
 def remove_headers(tex):
     """
@@ -116,9 +124,6 @@ def remove_section_content(tex, section_names):
             if page_break_match:
                 possible_end = start_pos + page_break_match.start()
                 end_pos = min(end_pos, possible_end)
-            
-            print(f"\nFound section to remove: {section_name}")
-            print(f"Position: {start_pos} to {end_pos}")
             regions_to_remove.append((start_pos, end_pos))
     
     # Remove all regions in reverse order
@@ -127,52 +132,106 @@ def remove_section_content(tex, section_names):
         cleaned_content = cleaned_content[:start] + cleaned_content[end:]
     return cleaned_content.strip()
 
-current_directory = os.path.dirname(os.path.abspath(__file__))
-with open(os.path.join(current_directory, 'lhcb_symbols.csv'), mode='r') as file:
-    reader = csv.reader(file)
-    lhcb_symbols = next(reader)
+# Removes all formatting commands from a LaTeX string
+def remove_double_brackets(input_string):
+    changed = True
+    while changed:
+        changed = False
+        new_str = ""
+        remaining_str = input_string
+        search = re.search(r"\{\s*\{", remaining_str)
+        while search:
+            first_open_bracket = search.span()[0]
+            second_open_bracket = search.span()[1]
+            first_closing_bracket = expand_latex_macros.find_matching_brace(remaining_str, second_open_bracket)
+            match = re.match("\s*\}", remaining_str[first_closing_bracket+1:])
+            if match:
+                second_closing_bracket = first_closing_bracket + match.span()[1]
+                new_str += remaining_str[:first_open_bracket+1] 
+                remaining_str = remaining_str[second_open_bracket:first_closing_bracket] + remaining_str[second_closing_bracket:]
+                changed = True
+            else:
+                new_str += remaining_str[:first_open_bracket+1]
+                remaining_str = remaining_str[first_open_bracket+1:]
+            search = re.search(r"\{\s*\{", remaining_str)
+        new_str += remaining_str
+        input_string = new_str
+    return input_string
 
-def clean_tex(tex, sections_to_remove=None):
-    """
-    Main cleaning function
+def get_command_mappings(tex_path, timeout_seconds=30):
+    def timeout_handler(signum, frame):
+        raise TimeoutError(f"Execution timed out while processing {tex_path}")
+    signal.signal(signal.SIGALRM, timeout_handler)
+    signal.alarm(timeout_seconds)
     
-    Args:
-        tex (str): Input LaTeX tex
-        sections_to_remove (list): List of section names whose content should be removed
-    """
-    tex = expand_latex_macros.expand_latex_macros(tex, commands_dont_expand=lhcb_symbols)
-    tex = remove_headers(tex)
-    tex = remove_boilerplate(tex)
-    tex = remove_lhcb_content(tex)
-    tex = remove_section_content(tex, sections_to_remove)
-    # Remove excessive newlines
-    tex = re.sub(r"\n[\s]+", "\n", tex)
-    return tex
-
-def process_file(input_file, output_file, sections_to_remove=None):
-    """
-    Process a LaTeX file, cleaning it and optionally removing specified sections
+    try:
+        tex = open(tex_path).read()
+        return expand_latex_macros.get_command_mappings(tex)
     
-    Args:
-        input_file (str): Path to input LaTeX file
-        output_file (str): Path to output cleaned file
-        sections_to_remove (list): Optional list of section names whose content should be removed
-    """
-
-    print("Input File: " , input_file)
-
-    with open(input_file, 'r') as f:
-        tex = f.read()
-
-    cleaned = clean_tex(tex, sections_to_remove)
+    except TimeoutError as e:
+        print(e)
+        return {}
     
-    with open(output_file, 'w') as f:
-        f.write(cleaned)
+    finally:
+        signal.alarm(0)
 
+def clean_and_save_tex_file(tex_path, cleaned_tex_dir, command_mappings, sections_to_remove, timeout_seconds=30):
+    def timeout_handler(signum, frame):
+        raise TimeoutError(f"Execution timed out while processing {tex_path}")
+    signal.signal(signal.SIGALRM, timeout_handler)
+    signal.alarm(timeout_seconds)
+    
+    try:
+        tex = open(tex_path).read()
+        tex = remove_headers(tex)
+        tex = remove_boilerplate(tex)
+        tex = remove_lhcb_content(tex)
+        tex = remove_section_content(tex, sections_to_remove)
+
+        tex = expand_latex_macros.sub_macros_for_defs(tex, command_mappings)
+        tex = expand_latex_macros.clean_up_formatting(tex)
+        tex = remove_double_brackets(tex)
+        # Remove excessive newlines, spaces, and all math mode declarations $
+        tex = re.sub(r"\n[\s]+", "\n", tex)
+        tex = re.sub(r"[ \t\r\f]+", " ", tex)
+        tex = re.sub(r'(?<!\\)\$', '', tex)
+
+        with open(cleaned_tex_dir / tex_path.name, "w") as file:
+            file.write(tex)
+    
+    except TimeoutError as e:
+        print(e)
+    
+    finally:
+        signal.alarm(0)
+
+def clean_and_expand_macros(tex_dir, cleaned_tex_dir, sections_to_remove=[]):
+    n_cores = max(os.cpu_count() - 1, 1)
+    headers = os.listdir(tex_dir)
+    tex_paths = [Path(tex_dir) / header for header in filter(lambda str: ".tex" in str, headers)]
+
+    command_mappings_all = []
+    with ProcessPoolExecutor(max_workers=n_cores) as executor:
+        results = list(tqdm(executor.map(get_command_mappings, tex_paths), 
+                            total=len(tex_paths), 
+                            desc=f"Parsing & cleaning LaTeX Macros from {tex_dir}"))
+        command_mappings_all.extend(results)
+    command_mappings = dict(chain.from_iterable(d.items() for d in command_mappings_all))
+
+    curried_clean_and_save_tex_file = partial(clean_and_save_tex_file, cleaned_tex_dir=Path(cleaned_tex_dir), command_mappings=command_mappings, sections_to_remove=sections_to_remove)
+    with ProcessPoolExecutor(max_workers=n_cores) as executor:
+        results = list(tqdm(executor.map(curried_clean_and_save_tex_file, tex_paths), 
+                            total=len(tex_paths), 
+                            desc=f"Cleaning tex files and saving to {cleaned_tex_dir}"))
 
 if __name__ == '__main__':
-    sections_to_remove = ['Acknowledgements', 'References']
-    process_file(
-        '/work/submit/mcgreivy/beauty-in-stats/src/scraper/data/expanded_tex/2501.12611.tex',
-        'test_cleaned.tex', 
-    sections_to_remove)
+    tex_dir = "/work/submit/mcgreivy/beauty-in-stats/src/scraper/data/expanded_tex/"
+    cleaned_tex_dir = "/work/submit/mcgreivy/beauty-in-stats/src/scraper/data/cleaned_tex/"
+    sections_to_remove = [
+        'Acknowledgements',
+        'Acknowledgments',
+        'References',
+        'Bibliography',
+    ]
+    os.makedirs(cleaned_tex_dir, exist_ok = True)
+    clean_and_expand_macros(tex_dir, cleaned_tex_dir, sections_to_remove)
