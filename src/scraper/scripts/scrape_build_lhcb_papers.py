@@ -186,6 +186,7 @@ def scrape_and_enrich_papers(
                         metadata = data['hits']['hits'][0]['metadata']
                         citations = metadata.get('citation_count', 0)
                         abstract = inspire_client.get_arxiv_abstract(metadata.get('abstracts', []))
+                        # The abstract is stored exactly as received from the API
                         arxiv_eprints = metadata.get('arxiv_eprints', [])
                         arxiv_pdf = None
                         if arxiv_eprints:
